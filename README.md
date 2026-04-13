@@ -148,14 +148,15 @@ User Message
 ```bash
 # Clone
 git clone https://github.com/neurodermai/ARGUS_X.git
-cd ARGUS_X/argus/backend
+cd ARGUS_X
 
 # Setup
+cd argus/backend
 python -m venv venv
 source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r ../../requirements.txt
 
-# Configure
+# Configure — .env must live in argus/backend/ (where the app runs)
 cp .env.example .env
 # Edit .env with your Supabase + LLM credentials
 
@@ -348,6 +349,10 @@ The project includes a `Dockerfile` and `railway.json` for one-click Railway dep
 | `OPENAI_API_KEY` | ❌ | OpenAI API key (alternative) |
 | `LLM_MODEL` | ❌ | Model name (default: mock mode) |
 | `HF_MODEL_REPO` | ❌ | HuggingFace repo for ONNX model |
+| `REDIS_URL` | ❌ | Redis URL for session persistence (falls back to in-memory) |
+| `CORS_ORIGINS` | ❌ | Comma-separated allowed origins (defaults to localhost) |
+| `PORT` | ❌ | Server port (Railway sets automatically, default: 8000) |
+| `SENTRY_DSN` | ❌ | Sentry error tracking DSN |
 
 ---
 
