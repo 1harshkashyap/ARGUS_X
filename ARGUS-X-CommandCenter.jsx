@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
    Every pixel is intentional. Every animation has meaning.
    ═══════════════════════════════════════════════════════════════════════ */
 
-// ── Font injection ─────────────────────────────────────────────────────
+// ── Font injection (module-level, runs once on import) ──────────────────
 const FONTS_INJECTED = { done: false };
 function injectFonts() {
   if (FONTS_INJECTED.done) return;
@@ -16,6 +16,7 @@ function injectFonts() {
   l.href = "https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700;900&family=Orbitron:wght@400;700;900&display=swap";
   document.head.appendChild(l);
 }
+injectFonts();
 
 // ── Constants ─────────────────────────────────────────────────────────
 const THREAT_TYPES = ["INSTRUCTION_OVERRIDE","ROLE_OVERRIDE","DATA_EXFIL","INDIRECT_INJECTION","OBFUSCATED","CONTEXT_OVERFLOW","MULTI_TURN","SOCIAL_ENG"];
@@ -56,6 +57,20 @@ const SOPH_EXPLAINERS = [
   "Apex — this is a targeted campaign payload.",
 ];
 
+// ── Backend connection (centralized config) ──────────────────────────
+// Priority: window.__ARGUS_CONFIG__ → auto-detect from page location → localhost fallback
+// To override: set window.__ARGUS_CONFIG__ = { apiUrl: "https://...", wsUrl: "wss://..." }
+// before loading this component (e.g., in index.html or a deployment config script).
+const _cfg = (typeof window !== "undefined" && window.__ARGUS_CONFIG__) || {};
+const _loc = typeof window !== "undefined" ? window.location : {};
+const _backendHost = _loc.hostname === "localhost"
+  ? "localhost:8000"
+  : (_loc.host || "localhost:8000");
+const _proto = _loc.protocol === "https:" ? "https" : "http";
+const _wsproto = _loc.protocol === "https:" ? "wss" : "ws";
+const API_URL = _cfg.apiUrl || `${_proto}://${_backendHost}`;
+const WS_URL = _cfg.wsUrl || `${_wsproto}://${_backendHost}`;
+
 // ── State generators ──────────────────────────────────────────────────
 let _uid = 0;
 function uid() { return ++_uid; }
@@ -63,21 +78,24 @@ function randItem(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 function randInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
 function randFloat(min, max) { return +(Math.random() * (max - min) + min).toFixed(2); }
 
-function generateAttack() {
-  const type = randItem(THREAT_TYPES);
-  const tier = randInt(1, 5);
-  const soph = Math.min(10, tier * 2 + randInt(0, 2));
-  const blocked = Math.random() > 0.04;
-  const muts = blocked ? randInt(3, 14) : 0;
+// generateAttack() — DISABLED: replaced by real backend WebSocket feed
+// Original simulation function preserved for reference/rollback:
+// function generateAttack() { ... }
+
+function normalizeEvent(ev) {
   return {
-    id: uid(), type, tier, soph, blocked,
-    text: randItem(ATTACK_TEXTS),
-    score: blocked ? randFloat(0.75, 0.99) : randFloat(0.45, 0.72),
-    latency: randFloat(12, 65),
-    reason: randItem(XAI_REASONS),
-    muts,
-    ts: new Date(),
-    layer: randItem(["INPUT_FIREWALL","ML_CLASSIFIER","OUTPUT_AUDITOR"]),
+    id: ev.id || uid(),
+    type: ev.threat_type || "UNKNOWN",
+    tier: Math.ceil((ev.sophistication || 1) / 2),
+    soph: ev.sophistication || 1,
+    blocked: ev.action === "BLOCKED",
+    text: ev.preview || ev.message || "",
+    score: ev.score || 0,
+    latency: ev.latency_ms || 0,
+    reason: ev.explanation || "",
+    muts: ev.mutations_preblocked || 0,
+    ts: ev.ts ? new Date(ev.ts) : new Date(),
+    layer: ev.layer || ev.method || "INPUT_FIREWALL",
   };
 }
 
@@ -595,6 +613,12 @@ function MiniClusterMap({ attacks }) {
       }
     });
 
+    // Prune stale nodes — keep only IDs present in current attacks window
+    const activeIds = new Set(attacks.slice(-40).map(a => String(a.id)));
+    Object.keys(nodesRef.current).forEach(id => {
+      if (!activeIds.has(id)) delete nodesRef.current[id];
+    });
+
     let animId;
     function draw() {
       ctx.clearRect(0, 0, W, H);
@@ -639,7 +663,6 @@ function MiniClusterMap({ attacks }) {
 // MAIN COMMAND CENTER
 // ─────────────────────────────────────────────────────────────────────
 export default function CommandCenter() {
-  injectFonts();
 
   const [attacks, setAttacks] = useState([]);
   const [stats, setStats] = useState({ blocked:0, muts:0, bypasses:0, patched:0, total:0 });
@@ -652,66 +675,143 @@ export default function CommandCenter() {
   const [campaignCount, setCampaignCount] = useState(0);
   const [showAlert, setShowAlert] = useState(false);
   const [alertMsg, setAlertMsg] = useState("");
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [alertHistory, setAlertHistory] = useState([]);
+  const [showAlertHistory, setShowAlertHistory] = useState(false);
 
   const attacksRef = useRef(attacks);
   attacksRef.current = attacks;
 
-  // Main simulation loop
+  // ── WebSocket: live attack stream from backend ───────────────────────
   useEffect(() => {
-    const interval = setInterval(() => {
-      const currentTick = tickRef.current;
-      tickRef.current = currentTick + 1;
+    let ws;
+    let reconnectTimer;
+    let retries = 0;
+    const historyBuf = [];
+    let historyFlush = null;
 
-      const atk = generateAttack();
-      atk.tier = Math.min(5, Math.max(1, Math.round(1 + currentTick * 0.04 + (Math.random()-0.5))));
-      atk.soph = Math.min(10, atk.tier * 2 + randInt(0,2));
+    function connect() {
+      try {
+        ws = new WebSocket(`${WS_URL}/ws/live`);
+      } catch (err) { return; }
 
-      setAttacks(prev => [atk, ...prev.slice(0, 59)]);
-      setStats(prev => ({
-        total:    prev.total + 1,
-        blocked:  prev.blocked + (atk.blocked ? 1 : 0),
-        muts:     prev.muts + atk.muts,
-        bypasses: prev.bypasses + (atk.blocked ? 0 : 1),
-        patched:  prev.patched + (atk.blocked ? 0 : 1),
-      }));
-      setSophHistory(prev => [...prev.slice(-19), atk.soph]);
-      setLatHistory(prev => [...prev.slice(-19), atk.latency]);
-      setThreatLevel(lv => {
-        const newLv = Math.min(5, Math.max(0, lv + (atk.soph > 7 ? 1 : atk.soph < 3 ? -0.5 : 0)));
-        return newLv;
-      });
-      setTier(Math.min(5, 1 + Math.floor(currentTick * 0.04)));
+      ws.onopen = () => { retries = 0; };
 
-      // Defense log
-      const logEntry = {
-        id: uid(),
-        ts: new Date().toLocaleTimeString("en-US",{hour12:false}),
-        type: atk.blocked ? "BLOCK" : "BYPASS",
-        msg: atk.blocked
-          ? `${atk.type.replace(/_/g," ")} blocked · T${atk.tier} · ${Math.round(atk.score*100)}% · ${atk.latency}ms`
-          : `⚠ BYPASS: ${atk.type.replace(/_/g," ")} · auto-patching`,
-        color: atk.blocked ? "#00e676" : "#ffab00",
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.type === "ping") return;
+          const ev = msg.data;
+          if (!ev) return;
+
+          if (msg.type === "history") {
+            historyBuf.push(normalizeEvent(ev));
+            clearTimeout(historyFlush);
+            historyFlush = setTimeout(() => {
+              const batch = historyBuf.splice(0);
+              setAttacks(prev => [...batch, ...prev].slice(0, 60));
+            }, 150);
+            return;
+          }
+
+          // Live event (attack, sanitized, clean)
+          const atk = normalizeEvent(ev);
+          setAttacks(prev => [atk, ...prev.slice(0, 59)]);
+          setLastUpdated(new Date());
+          setSophHistory(prev => [...prev.slice(-19), atk.soph]);
+          setLatHistory(prev => [...prev.slice(-19), atk.latency]);
+
+          // Defense log entry
+          const logEntry = {
+            id: uid(),
+            ts: new Date().toLocaleTimeString("en-US", { hour12: false }),
+            type: atk.blocked ? "BLOCK" : ev.action === "SANITIZED" ? "SANITIZE" : "CLEAN",
+            msg: atk.blocked
+              ? `${atk.type.replace(/_/g, " ")} blocked · T${atk.tier} · ${Math.round(atk.score * 100)}% · ${atk.latency}ms`
+              : ev.action === "SANITIZED"
+                ? `⚠ SANITIZED: ${atk.type.replace(/_/g, " ")} · output auditor`
+                : `✓ CLEAN: input passed all layers`,
+            color: atk.blocked ? "#00e676" : ev.action === "SANITIZED" ? "#ffab00" : "#00e5ff",
+          };
+          if (atk.muts > 0) {
+            setDefenseLog(prev => [{
+              id: uid(), ts: logEntry.ts, type: "MUTATE",
+              msg: `Mutation engine: +${atk.muts} variants pre-blocked`,
+              color: "#5a0090",
+            }, logEntry, ...prev.slice(0, 38)]);
+          } else {
+            setDefenseLog(prev => [logEntry, ...prev.slice(0, 39)]);
+          }
+        } catch (err) { /* ignore malformed messages */ }
       };
-      if (atk.muts > 0) {
-        setDefenseLog(prev => [{
-          id: uid(), ts: logEntry.ts, type: "MUTATE",
-          msg: `Mutation engine: +${atk.muts} variants pre-blocked`,
-          color: "#5a0090",
-        }, logEntry, ...prev.slice(0, 38)]);
-      } else {
-        setDefenseLog(prev => [logEntry, ...prev.slice(0, 39)]);
-      }
 
-      // Campaign detection (every 20 ticks)
-      if (currentTick % 20 === 0 && currentTick > 0) {
-        setCampaignCount(c => c + 1);
-        const camThreat = randItem(THREAT_TYPES);
-        setShowAlert(true);
-        setAlertMsg(`CAMPAIGN DETECTED: ${camThreat.replace(/_/g," ")} · ${randInt(5,18)} events from ${randInt(3,9)} unique sources`);
-        setTimeout(() => setShowAlert(false), 5000);
-      }
-    }, 1400);
-    return () => clearInterval(interval);
+      ws.onclose = () => {
+        retries++;
+        const delay = Math.min(1000 * Math.pow(2, retries), 15000);
+        reconnectTimer = setTimeout(connect, delay);
+      };
+
+      ws.onerror = () => { ws.close(); };
+    }
+
+    connect();
+    return () => {
+      clearTimeout(reconnectTimer);
+      clearTimeout(historyFlush);
+      if (ws) { ws.onclose = null; ws.close(); }
+    };
+  }, []);
+
+  // ── Polling: analytics stats from backend ─────────────────────────────
+  useEffect(() => {
+    let active = true;
+    async function poll() {
+      try {
+        const res = await fetch(`${API_URL}/api/v1/analytics/stats`);
+        if (!res.ok || !active) return;
+        const data = await res.json();
+        if (!active) return;
+
+        setStats({
+          total: data.total || 0,
+          blocked: data.blocked || 0,
+          muts: data.mutations_preblocked || 0,
+          bypasses: data.sanitized || 0,
+          patched: data.sanitized || 0,
+        });
+        setLastUpdated(new Date());
+
+        if (data.battle) {
+          setTier(data.battle.red_tier || 1);
+        }
+
+        if (data.evolution && typeof data.evolution.threat_level === "number") {
+          setThreatLevel(data.evolution.threat_level);
+        } else if (data.total > 0) {
+          const bypassRate = (data.sanitized || 0) / data.total;
+          setThreatLevel(Math.min(5, Math.round(bypassRate * 10)));
+        }
+
+        if (data.campaigns && data.campaigns.length > 0) {
+          setCampaignCount(data.campaigns.length);
+          const latest = data.campaigns[data.campaigns.length - 1];
+          if (latest && latest.detected_at) {
+            const age = Date.now() - new Date(latest.detected_at).getTime();
+            if (age < 10000) {
+              const msg = `CAMPAIGN DETECTED: ${(latest.pattern || "UNKNOWN").replace(/_/g, " ")} · ${latest.event_count || "?"} events from ${latest.source_count || "?"} unique sources`;
+              setShowAlert(true);
+              setAlertMsg(msg);
+              setAlertHistory(prev => [{ ts: new Date().toLocaleTimeString("en-US", { hour12: false }), msg }, ...prev.slice(0, 19)]);
+              setTimeout(() => setShowAlert(false), 5000);
+            }
+          }
+        }
+      } catch (err) { /* silently retry next cycle */ }
+    }
+
+    poll();
+    const interval = setInterval(poll, 3000);
+    return () => { active = false; clearInterval(interval); };
   }, []);
 
   const blockRate = stats.total > 0 ? Math.round((stats.blocked / stats.total) * 100) : 100;
@@ -752,6 +852,34 @@ export default function CommandCenter() {
           <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 9, color: "#ff1744", letterSpacing: "0.2em", marginBottom: 5 }}>⚠ CAMPAIGN DETECTED</div>
           <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 10, color: "#c0d0e0", lineHeight: 1.6 }}>{alertMsg}</div>
           <div style={{ marginTop: 6, fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: "#5a7090" }}>Correlator flagged · Auto-escalated</div>
+        </div>
+      )}
+
+      {/* ── ALERT HISTORY (toggle) ── */}
+      {alertHistory.length > 0 && !showAlert && (
+        <div style={{ position: "absolute", top: 60, right: 16, zIndex: 90 }}>
+          <div
+            onClick={() => setShowAlertHistory(v => !v)}
+            style={{
+              fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: "#ff6d00",
+              cursor: "pointer", letterSpacing: "0.1em", padding: "4px 10px",
+              background: "rgba(6,10,20,0.9)", border: "1px solid #331500", borderRadius: 6,
+            }}
+          >
+            ⚠ {alertHistory.length} CAMPAIGN{alertHistory.length > 1 ? "S" : ""} · {showAlertHistory ? "HIDE" : "SHOW"}
+          </div>
+          {showAlertHistory && (
+            <div style={{
+              marginTop: 4, background: "rgba(6,10,20,0.97)", border: "1px solid #331500",
+              borderRadius: 6, padding: "8px 10px", maxWidth: 300, maxHeight: 200, overflowY: "auto",
+            }}>
+              {alertHistory.map((a, i) => (
+                <div key={i} style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 9, color: "#7a8a9a", lineHeight: 1.7, borderBottom: i < alertHistory.length - 1 ? "1px solid #1a2030" : "none", padding: "3px 0" }}>
+                  <span style={{ color: "#5a4030" }}>[{a.ts}]</span> {a.msg}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -825,7 +953,7 @@ export default function CommandCenter() {
         flex: 1,
         display: "grid",
         gridTemplateColumns: "240px 1fr 220px",
-        gridTemplateRows: "1fr 130px",
+        gridTemplateRows: "1fr 180px",
         gap: "1px",
         background: "#0d1628",
         overflow: "hidden",
@@ -836,13 +964,26 @@ export default function CommandCenter() {
         <div style={{ background: "#030508", display: "flex", flexDirection: "column", overflow: "hidden", gridRow: "1 / 3" }}>
           <div style={{ padding: "8px 12px 7px", borderBottom: "1px solid #1a2845", flexShrink: 0 }}>
             <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, letterSpacing: "0.2em", color: "#3a5070", display: "flex", alignItems: "center", gap: 6 }}>
-              <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#ff1744", animation: "pulse 0.9s ease-in-out infinite" }} />
+              <div style={{ width: 4, height: 4, borderRadius: "50%", background: attacks.length > 0 ? "#ff1744" : "#3a5070", animation: attacks.length > 0 ? "pulse 0.9s ease-in-out infinite" : "none" }} />
               LIVE THREAT FEED
               <span style={{ marginLeft: "auto", color: "#1a3050" }}>{stats.total} total</span>
             </div>
+            {lastUpdated && (
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: "#1a3050", marginTop: 2 }}>
+                LAST UPDATED: {lastUpdated.toLocaleTimeString("en-US", { hour12: false })}
+              </div>
+            )}
           </div>
           <div style={{ flex: 1, overflowY: "auto", padding: "6px 8px", display: "flex", flexDirection: "column", gap: 4 }}>
-            {attacks.slice(0, 30).map(a => <FeedItem key={a.id} attack={a} />)}
+            {attacks.length === 0 ? (
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 10, color: "#2a4060", textAlign: "center", padding: "30px 10px", lineHeight: 1.8 }}>
+                <div style={{ fontSize: 18, marginBottom: 8, opacity: 0.4 }}>⌛</div>
+                No live data — waiting for connection…
+                <div style={{ fontSize: 8, color: "#1a3050", marginTop: 6 }}>Events will appear here once the backend streams data.</div>
+              </div>
+            ) : (
+              attacks.slice(0, 30).map(a => <FeedItem key={a.id} attack={a} />)
+            )}
           </div>
         </div>
 
@@ -950,8 +1091,8 @@ export default function CommandCenter() {
           <div style={{ flex: 1, overflowY: "auto", padding: "4px 10px" }}>
             {defenseLog.map(l => (
               <div key={l.id} style={{
-                fontFamily: "'Share Tech Mono',monospace", fontSize: 9,
-                lineHeight: 1.8, display: "flex", gap: 8,
+                fontFamily: "'Share Tech Mono',monospace", fontSize: 11,
+                lineHeight: 2.0, display: "flex", gap: 10,
                 animation: "slideUp 0.2s ease",
               }}>
                 <span style={{ color: "#1a3050" }}>[{l.ts}]</span>

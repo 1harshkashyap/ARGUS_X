@@ -141,7 +141,7 @@ User Message
 ### Prerequisites
 - Python 3.11+
 - [Supabase](https://supabase.com) project (free tier works)
-- API key for Claude or GPT *(optional — runs in mock mode without one)*
+- API key for Claude or GPT *(optional — see [Mock Mode](#mock-mode) below)*
 
 ### Installation
 
@@ -171,6 +171,16 @@ python main.py
 ```bash
 python scripts/seed_demo.py --count 40
 ```
+
+### Mock Mode
+
+If no `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` is configured, the LLM Core automatically enters **mock mode**. In this mode:
+
+- The LLM is **not called**. No external API requests are made.
+- Responses are selected from a pool of **8 static, context-aware HR chatbot replies** (e.g., leave policy, benefits, salary, onboarding).
+- Selection is **keyword-based** — the system matches keywords in the user message (e.g., "leave", "salary", "remote") to return a contextually plausible response. If no keywords match, a random response is chosen.
+- Mock mode is intended for **development, demos, and testing** — it allows the full 9-layer security pipeline (firewall, fingerprinting, mutation, XAI) to run without requiring LLM API credentials.
+- The `/health` endpoint reports `llm_mode: "MOCK"` when mock mode is active.
 
 ---
 
@@ -348,7 +358,7 @@ The project includes a `Dockerfile` and `railway.json` for one-click Railway dep
 | `SUPABASE_ANON_KEY` | ❌ | Supabase **anon** key (frontend-safe — respects RLS) |
 | `ANTHROPIC_API_KEY` | ❌ | Claude API key (for real LLM) |
 | `OPENAI_API_KEY` | ❌ | OpenAI API key (alternative) |
-| `LLM_MODEL` | ❌ | Model name (default: mock mode) |
+| `LLM_MODEL` | ❌ | Model name for LiteLLM (e.g., `claude-3-haiku-20240307`). If no API keys are set, the system enters [mock mode](#mock-mode) — returns static HR chatbot responses without calling any LLM API. |
 | `HF_MODEL_REPO` | ❌ | HuggingFace repo for ONNX model |
 | `REDIS_URL` | ❌ | Redis URL for session persistence (falls back to in-memory) |
 | `CORS_ORIGINS` | ❌ | Comma-separated allowed origins (defaults to localhost) |

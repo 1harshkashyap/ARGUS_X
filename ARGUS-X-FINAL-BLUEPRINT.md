@@ -1027,7 +1027,7 @@ Step back. No thank you. No questions invited. Let the system run.
 A: "Every blocked attack is passed to the mutation engine, which generates 50+ semantic variants using synonym substitution, encoding obfuscation, and framing mutations. Each variant is tested against the existing rules. Variants that would bypass the rules are added as dynamic rules. We've never needed to restart the server to update the firewall — it updates itself continuously."
 
 **Q: What's the false positive rate?**
-A: "On our PromptBench + JailbreakBench benchmark, we achieve 94.2% detection with a 2.8% false positive rate. For the false positive cases — where a legitimate message scores between 70-85% confidence — we don't hard block. We route to step-up authentication rather than rejection. The 87% threshold is for hard blocking."
+A: "Our design target is 94% detection with under 3% false positives, based on internal testing against PromptBench and JailbreakBench-style payloads. *Note: these are internal simulation results, not independently benchmarked — formal evaluation against a standardized dataset is in progress.* For messages scoring between 70-85% confidence, we don't hard block — we route to step-up authentication rather than rejection. The 87% threshold is for hard blocking."
 
 **Q: How is this different from Cloudflare AI Gateway?**
 A: "Cloudflare AI Gateway is monitoring and rate limiting — it's observability. It doesn't block injections. It doesn't generate variants. It doesn't explain its decisions. It doesn't fight itself. ARGUS-X is a security system, not an observability platform. They're solving different problems."
