@@ -3,7 +3,7 @@ ARGUS-X — Red Team Router
 Manual attack testing endpoint for the dashboard console.
 """
 from fastapi import APIRouter, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 import time, uuid
@@ -27,9 +27,9 @@ router = APIRouter()
 
 
 class RedTeamRequest(BaseModel):
-    message: str
+    message: str = Field(..., max_length=5000, description="Attack payload (max 5000 chars)")
     attack_type: Optional[str] = "MANUAL"
-    tier: int = 1
+    tier: int = Field(default=1, ge=1, le=5, description="Escalation tier (1-5)")
 
 
 @router.post("/redteam")
@@ -73,6 +73,7 @@ async def redteam_test(req: RedTeamRequest, request: Request):
         "user_id": "redteam",
         "session_id": "redteam-" + str(uuid.uuid4())[:4],
         "score": fw_result.get("score", 0),
+        "preview": (req.message[:80] + "…") if len(req.message) > 80 else req.message,
     })
 
     return {

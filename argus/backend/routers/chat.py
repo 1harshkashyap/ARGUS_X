@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Rate limiting (graceful — no-op if slowapi not installed)
 try:
@@ -29,11 +29,11 @@ router = APIRouter()
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., max_length=10000, description="User message (max 10000 chars)")
     user_id: str = "anonymous"
     session_id: str = ""
     sentinel_off: bool = False
-    context: list = []
+    context: list = Field(default=[], max_length=10, description="Conversation context (max 10 items)")
 
 
 class ChatResponse(BaseModel):
