@@ -15,9 +15,9 @@ log = logging.getLogger("argus.correlator")
 
 # Campaign detection thresholds
 CAMPAIGN_THRESHOLDS = {
-    "RAPID":    {"window_minutes": 10, "min_reports": 5,  "severity": "HIGH"},
-    "SUSTAINED":{"window_minutes": 60, "min_reports": 15, "severity": "CRITICAL"},
-    "GLOBAL":   {"window_minutes": 1440,"min_reports": 50, "severity": "CRITICAL"},
+    "RAPID":    {"window_minutes": 10, "min_reports": 3,  "severity": "HIGH"},
+    "SUSTAINED":{"window_minutes": 60, "min_reports": 8,  "severity": "CRITICAL"},
+    "GLOBAL":   {"window_minutes": 1440,"min_reports": 25, "severity": "CRITICAL"},
 }
 
 class ThreatCorrelator:
@@ -94,10 +94,11 @@ class ThreatCorrelator:
         for campaign_type, cfg in CAMPAIGN_THRESHOLDS.items():
             window_start = now - timedelta(minutes=cfg["window_minutes"])
             
-            # Filter events in window
+            # Filter events in window — normalize timestamps for comparison
+            window_ts = window_start.isoformat() + "Z"
             recent = [
                 e for e in self.threat_window
-                if e.get("ts", "") >= window_start.isoformat()
+                if (e.get("ts", "").replace("Z", "") >= window_start.isoformat())
             ]
             
             if len(recent) < cfg["min_reports"]:
@@ -114,7 +115,7 @@ class ThreatCorrelator:
                 unique_users = len(set(e.get("user_id") for e in events))
                 unique_sessions = len(set(e.get("session_id") for e in events))
                 
-                if unique_users >= 3 and len(events) >= cfg["min_reports"]:
+                if len(events) >= cfg["min_reports"]:
                     # This is a coordinated campaign — multiple users, same attack type
                     campaign = {
                         "id":            f"CAMP-{threat_type[:4]}-{int(now.timestamp())}",

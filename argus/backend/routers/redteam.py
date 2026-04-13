@@ -5,7 +5,8 @@ Manual attack testing endpoint for the dashboard console.
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 from typing import Optional
-import time
+from datetime import datetime
+import time, uuid
 
 router = APIRouter()
 
@@ -45,6 +46,18 @@ async def redteam_test(req: RedTeamRequest, request: Request):
     )
 
     elapsed = (time.perf_counter() - t0) * 1000
+
+    # Feed into correlator for campaign detection
+    action = "BLOCKED" if fw_result["blocked"] else "CLEAN"
+    app.state.correlator.ingest_event({
+        "ts": datetime.utcnow().isoformat() + "Z",
+        "action": action,
+        "threat_type": threat_type,
+        "fingerprint": fp.get("fingerprint_id"),
+        "user_id": "redteam",
+        "session_id": "redteam-" + str(uuid.uuid4())[:4],
+        "score": fw_result.get("score", 0),
+    })
 
     return {
         "blocked": fw_result["blocked"],

@@ -55,9 +55,10 @@ class RedTeamAgent:
     4. Gets smarter over time using found bypasses
     """
     
-    def __init__(self, db, firewall):
+    def __init__(self, db, firewall, correlator=None):
         self.db        = db
         self.firewall  = firewall
+        self.correlator = correlator
         self.running   = False
         self.paused    = False
         self.bypasses_found = 0
@@ -100,6 +101,18 @@ class RedTeamAgent:
             result = await self._try_attack(attack)
             cycle_results.append(result)
             self.attacks_tried += 1
+            
+            # Feed into correlator for campaign detection
+            if self.correlator:
+                self.correlator.ingest_event({
+                    "ts": datetime.utcnow().isoformat() + "Z",
+                    "action": "CLEAN" if result["bypassed"] else "BLOCKED",
+                    "threat_type": attack["type"],
+                    "fingerprint": None,
+                    "user_id": "red-agent",
+                    "session_id": f"red-cycle-{self.cycle_count}",
+                    "score": result.get("score", 0),
+                })
             
             if result["bypassed"]:
                 self.bypasses_found += 1

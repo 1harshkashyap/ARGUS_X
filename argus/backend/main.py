@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI):
     app.state.mutator = SemanticMutationEngine(app.state.models)
 
     # Layer 5: AI vs AI Battle
-    app.state.red_agent = RedTeamAgent(app.state.db, app.state.firewall)
+    app.state.red_agent = RedTeamAgent(app.state.db, app.state.firewall, app.state.correlator)
     app.state.blue_agent = BlueAgent(app.state.firewall, app.state.mutator, app.state.fingerprinter)
     app.state.battle = BattleEngine(app.state.red_agent, app.state.blue_agent, app.state.db)
 
