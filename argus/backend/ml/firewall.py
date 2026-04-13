@@ -2,9 +2,11 @@
 ARGUS-X — Input Firewall (Layer 2)
 Two-stage detection: Regex Rule Engine (0-1ms) + ONNX ML Classifier (15-30ms)
 Falls back to rule-only mode if ML model unavailable.
+CRITICAL: ONNX inference is CPU-bound and offloaded via asyncio.to_thread().
 """
 import re
 import time
+import asyncio
 import logging
 import numpy as np
 from typing import Dict, Any, List, Optional
@@ -134,8 +136,10 @@ class InputFirewall:
             return regex_result
 
         # ── Stage 2: ML Classifier (15-30ms) ─────────────────────────────────
+        # CRITICAL: ONNX inference is CPU-bound — offload to thread to keep
+        # the event loop responsive during concurrent requests.
         if self._ml_available:
-            ml_result = self._ml_scan(text)
+            ml_result = await asyncio.to_thread(self._ml_scan, text)
             if ml_result["blocked"]:
                 ml_result["latency_ms"] = round((time.perf_counter() - t0) * 1000, 2)
                 return ml_result

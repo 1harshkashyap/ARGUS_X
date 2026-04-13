@@ -109,7 +109,7 @@ async def chat(req: ChatRequest, request: Request):
             app.state.firewall.tighten_threshold()
 
         # ── LAYER 6: THREAT CLUSTERER ────────────────────────────────────
-        app.state.clusterer.ingest(req.message, fw["threat_type"], sophistication)
+        await app.state.clusterer.ingest(req.message, fw["threat_type"], sophistication)
 
         # ── LAYER 3: THREAT CORRELATOR (ingest for campaign detection) ───
         elapsed = (time.perf_counter() - t0) * 1000

@@ -2,7 +2,9 @@
 ARGUS-X — Threat Clusterer (Layer 6)
 Uses DBSCAN on sentence embeddings to group attacks into semantic families.
 Re-clusters every 10 attacks for real-time intelligence.
+CRITICAL: SBERT encoding and DBSCAN fit are CPU-bound — offloaded via asyncio.to_thread().
 """
+import asyncio
 import logging
 import hashlib
 from datetime import datetime
@@ -54,7 +56,7 @@ class ThreatClusterer:
         else:
             log.info("✅ Threat Clusterer initialized (keyword clustering mode)")
 
-    def ingest(self, text: str, threat_type: str, sophistication: int = 0):
+    async def ingest(self, text: str, threat_type: str, sophistication: int = 0):
         """Ingest a new attack for clustering."""
         self.attacks.append({
             "text": text[:300],
@@ -65,16 +67,18 @@ class ThreatClusterer:
         self._attack_count += 1
 
         # Compute embedding if encoder available
+        # CRITICAL: SBERT encode() is CPU-bound (30-100ms+) — offload to thread
         if self.encoder:
             try:
-                embedding = self.encoder.encode(text[:300])
+                embedding = await asyncio.to_thread(self.encoder.encode, text[:300])
                 self.embeddings.append(embedding)
             except Exception as e:
                 log.warning(f"Embedding failed: {e}")
 
         # Re-cluster every N attacks
+        # CRITICAL: DBSCAN fit() is CPU-heavy — offload to thread
         if self._attack_count % self.recluster_interval == 0:
-            self._recluster()
+            await asyncio.to_thread(self._recluster)
 
         # Keep bounded
         if len(self.attacks) > 2000:
