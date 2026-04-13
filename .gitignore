@@ -17,3 +17,10 @@ nixpacks.toml
 Procfile
 argus/backend/railway.json
 argus/backend/Procfile
+
+# ── Duplicate Repo Guard ─────────────────────────────────────────────────────
+# ARGUS_X/ was a broken inner copy of the entire repo. Do not re-create.
+ARGUS_X/
+
+# ── Frontend Build Artifacts ─────────────────────────────────────────────────
+argus/frontend/dist/

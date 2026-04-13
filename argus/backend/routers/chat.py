@@ -8,17 +8,32 @@ import uuid
 from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+# Rate limiting (graceful — no-op if slowapi not installed)
+try:
+    from slowapi import Limiter
+    from slowapi.util import get_remote_address
+    limiter = Limiter(key_func=get_remote_address)
+except ImportError:
+    limiter = None
+
+
+def _rate_limit(limit_string: str):
+    """Return rate-limit decorator, or no-op if slowapi unavailable."""
+    if limiter:
+        return limiter.limit(limit_string)
+    return lambda f: f
 
 router = APIRouter()
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., max_length=10000, description="User message (max 10000 chars)")
     user_id: str = "anonymous"
     session_id: str = ""
     sentinel_off: bool = False
-    context: list = []
+    context: list = Field(default=[], max_length=10, description="Conversation context (max 10 items)")
 
 
 class ChatResponse(BaseModel):
@@ -63,6 +78,7 @@ def _build_event(user_id, session_id, message, action, threat_type,
 
 
 @router.post("/chat", response_model=ChatResponse)
+@_rate_limit("20/minute")
 async def chat(req: ChatRequest, request: Request):
     t0 = time.perf_counter()
     app = request.app

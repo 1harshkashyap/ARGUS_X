@@ -30,6 +30,17 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
+# Rate limiting
+try:
+    from slowapi import Limiter, _rate_limit_exceeded_handler
+    from slowapi.util import get_remote_address
+    from slowapi.errors import RateLimitExceeded
+    limiter = Limiter(key_func=get_remote_address)
+    RATE_LIMIT_AVAILABLE = True
+except ImportError:
+    limiter = None
+    RATE_LIMIT_AVAILABLE = False
+
 # Internal imports
 from utils.logger import setup_logger
 from utils.supabase_client import SupabaseClient
@@ -155,6 +166,11 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Requested-With", "X-API-Key"],
 )
+
+# ─── Rate Limiting ────────────────────────────────────────────────────────────
+if RATE_LIMIT_AVAILABLE:
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # ─── Include Routers ──────────────────────────────────────────────────────────
 # All /api/v1 routes require X-API-Key header (when API_KEY env var is set).

@@ -50,19 +50,27 @@ class ModelLoader:
         self._load_models()
 
     def _load_models(self):
-        """Attempt to load ONNX model and tokenizer."""
+        """
+        Attempt to load ONNX model and tokenizer.
+        Priority: pre-baked (Docker build) → local file → HuggingFace download → rule-only.
+        """
         model_path = os.path.join(self.model_dir, "argus_classifier.onnx")
         
-        # Step 1: Try local file
+        # Step 1: Try pre-baked or local file (instant startup — no download)
         if os.path.exists(model_path):
+            log.info("📦 Found pre-baked/local model — skipping HuggingFace download")
             self._load_onnx(model_path)
             self._load_tokenizer_local()
             return
 
-        # Step 2: Try HuggingFace Hub download
+        # Step 2: Try HuggingFace Hub download (runtime fallback for dev)
+        # WARNING: This adds 2-5 min to cold start. For production, bake the
+        # model into the Docker image using: docker build --build-arg HF_MODEL_REPO=...
         if HF_AVAILABLE and self.hf_repo:
             try:
                 log.info(f"📥 Downloading model from HuggingFace: {self.hf_repo}")
+                log.warning("⚠️ Runtime model download — expect slow cold start. "
+                           "For production, use --build-arg HF_MODEL_REPO to bake into image.")
                 downloaded_path = hf_hub_download(
                     repo_id=self.hf_repo,
                     filename="argus_classifier.onnx",

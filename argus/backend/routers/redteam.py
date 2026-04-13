@@ -3,21 +3,37 @@ ARGUS-X — Red Team Router
 Manual attack testing endpoint for the dashboard console.
 """
 from fastapi import APIRouter, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 import time, uuid
+
+# Rate limiting (graceful — no-op if slowapi not installed)
+try:
+    from slowapi import Limiter
+    from slowapi.util import get_remote_address
+    limiter = Limiter(key_func=get_remote_address)
+except ImportError:
+    limiter = None
+
+
+def _rate_limit(limit_string: str):
+    """Return rate-limit decorator, or no-op if slowapi unavailable."""
+    if limiter:
+        return limiter.limit(limit_string)
+    return lambda f: f
 
 router = APIRouter()
 
 
 class RedTeamRequest(BaseModel):
-    message: str
+    message: str = Field(..., max_length=5000, description="Attack payload (max 5000 chars)")
     attack_type: Optional[str] = "MANUAL"
-    tier: int = 1
+    tier: int = Field(default=1, ge=1, le=5, description="Escalation tier (1-5)")
 
 
 @router.post("/redteam")
+@_rate_limit("30/minute")
 async def redteam_test(req: RedTeamRequest, request: Request):
     """
     Manual red team test — run an attack against the live firewall.
@@ -57,6 +73,7 @@ async def redteam_test(req: RedTeamRequest, request: Request):
         "user_id": "redteam",
         "session_id": "redteam-" + str(uuid.uuid4())[:4],
         "score": fw_result.get("score", 0),
+        "preview": (req.message[:80] + "…") if len(req.message) > 80 else req.message,
     })
 
     return {

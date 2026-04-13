@@ -82,20 +82,30 @@ function randFloat(min, max) { return +(Math.random() * (max - min) + min).toFix
 // Original simulation function preserved for reference/rollback:
 // function generateAttack() { ... }
 
+// ── XSS Prevention ──────────────────────────────────────────────────
+// SECURITY: All attack payloads are untrusted input from the backend.
+// React escapes JSX text by default, but this helper provides defense-in-depth
+// in case dangerouslySetInnerHTML or innerHTML is ever introduced.
+// WARNING: Do NOT use dangerouslySetInnerHTML anywhere in this file.
+function sanitizeText(str) {
+  if (typeof str !== "string") return "";
+  return str.replace(/[<>]/g, "").replace(/\0/g, "");
+}
+
 function normalizeEvent(ev) {
   return {
     id: ev.id || uid(),
-    type: ev.threat_type || "UNKNOWN",
+    type: sanitizeText(ev.threat_type || "UNKNOWN"),
     tier: Math.ceil((ev.sophistication || 1) / 2),
     soph: ev.sophistication || 1,
     blocked: ev.action === "BLOCKED",
-    text: ev.preview || ev.message || "",
+    text: sanitizeText(ev.preview || ev.message || ""),
     score: ev.score || 0,
     latency: ev.latency_ms || 0,
-    reason: ev.explanation || "",
+    reason: sanitizeText(ev.explanation || ""),
     muts: ev.mutations_preblocked || 0,
     ts: ev.ts ? new Date(ev.ts) : new Date(),
-    layer: ev.layer || ev.method || "INPUT_FIREWALL",
+    layer: sanitizeText(ev.layer || ev.method || "INPUT_FIREWALL"),
   };
 }
 
