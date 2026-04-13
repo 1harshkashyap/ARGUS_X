@@ -382,7 +382,6 @@ argus-x/
 │
 ├── backend/
 │   ├── main.py                         ← FastAPI entry, lifespan, WS
-│   ├── Procfile                        ← Railway startup command
 │   ├── requirements.txt
 │   ├── .env.example
 │   │
