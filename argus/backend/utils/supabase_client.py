@@ -54,7 +54,7 @@ class SupabaseClient:
 
     async def _run_sync(self, func, *args, **kwargs):
         """Run synchronous supabase-py calls in executor to avoid blocking."""
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, partial(func, *args, **kwargs))
 
     # ── Events ────────────────────────────────────────────────────────────────

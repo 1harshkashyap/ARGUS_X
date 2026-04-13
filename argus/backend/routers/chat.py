@@ -218,9 +218,7 @@ async def chat(req: ChatRequest, request: Request):
 
 async def _assess_session_threat(app, session_id: str, user_id: str) -> str:
     """Session-level threat scoring based on behavioral drift."""
-    session = app.state.session_threats.get(session_id, {
-        "total": 0, "threats": 0, "last_score": 0, "escalation": 0
-    })
+    session = await app.state.session_store.get_session(session_id)
     ratio = session["threats"] / max(session["total"], 1)
     if ratio > 0.7 or session["escalation"] > 3:
         return "CRITICAL"
@@ -233,14 +231,5 @@ async def _assess_session_threat(app, session_id: str, user_id: str) -> str:
 
 async def _update_session(app, session_id: str, user_id: str, action: str, score: float):
     """Track session-level threat escalation."""
-    if session_id not in app.state.session_threats:
-        app.state.session_threats[session_id] = {
-            "total": 0, "threats": 0, "last_score": 0, "escalation": 0, "user_id": user_id
-        }
-    s = app.state.session_threats[session_id]
-    s["total"] += 1
-    if action in ("BLOCKED", "SANITIZED"):
-        s["threats"] += 1
-        if score > s["last_score"]:
-            s["escalation"] += 1
-    s["last_score"] = score
+    await app.state.session_store.update_session(session_id, user_id, action, score)
+

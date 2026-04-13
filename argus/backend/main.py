@@ -34,6 +34,7 @@ from pathlib import Path
 from utils.logger import setup_logger
 from utils.supabase_client import SupabaseClient
 from utils.model_loader import ModelLoader
+from utils.session_store import SessionStore
 from ml.firewall import InputFirewall
 from ml.auditor import OutputAuditor
 from ml.llm_core import LLMCore
@@ -96,8 +97,9 @@ async def lifespan(app: FastAPI):
     # WebSocket clients
     app.state.ws_clients: List[WebSocket] = []
 
-    # Session threat tracking
-    app.state.session_threats: dict = {}
+    # Session threat tracking (Redis-backed, persistent)
+    app.state.session_store = SessionStore()
+    await app.state.session_store.init()
 
     # Broadcast helper (must be set inside lifespan after state exists)
     app.state.broadcast = _broadcast
@@ -124,6 +126,7 @@ async def lifespan(app: FastAPI):
     log.info("✅ ARGUS-X fully operational — all 9 layers active")
     yield
     log.info("🔴 ARGUS-X shutting down")
+    await app.state.session_store.close()
 
 
 # ─── App ──────────────────────────────────────────────────────────────────────
