@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 /* ═══════════════════════════════════════════════════════════════════════
    ARGUS-X DEFENSE COMMAND CENTER
@@ -299,11 +299,11 @@ function SophMeter({ score }) {
 // ─────────────────────────────────────────────────────────────────────
 function XAICard({ attack, index }) {
   const color = THREAT_COLORS[attack.type] || "#ff1744";
-  const layerScores = [
+  const layerScores = useMemo(() => [
     { name: "Regex Engine", v: attack.blocked ? randFloat(0.6, 0.99) : randFloat(0.1, 0.4) },
     { name: "ML Classifier", v: attack.blocked ? randFloat(0.75, 0.98) : randFloat(0.4, 0.72) },
     { name: "Output Auditor", v: attack.blocked ? randFloat(0.5, 0.95) : randFloat(0.2, 0.5) },
-  ];
+  ], [attack.id]);
 
   return (
     <div style={{
