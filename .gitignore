@@ -9,3 +9,11 @@ models/
 venv/
 .venv/
 node_modules/
+
+# ── Build System Guard ────────────────────────────────────────────────────────
+# This project uses ONLY Dockerfile + root railway.json for deployment.
+# Block conflicting build configs from being re-committed.
+nixpacks.toml
+Procfile
+argus/backend/railway.json
+argus/backend/Procfile

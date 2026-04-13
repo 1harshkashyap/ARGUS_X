@@ -1,3 +1,9 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# ARGUS-X — SOLE BUILD SYSTEM (Dockerfile)
+# This project uses ONLY Docker for Railway deployment (see railway.json).
+# DO NOT add nixpacks.toml, Procfile, or a second railway.json.
+# Those files were removed to eliminate non-deterministic build conflicts.
+# ═══════════════════════════════════════════════════════════════════════════════
 FROM python:3.11-slim
 
 WORKDIR /app
