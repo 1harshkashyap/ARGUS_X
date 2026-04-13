@@ -617,7 +617,7 @@ export default function CommandCenter() {
   const [latHistory, setLatHistory] = useState([28,35,22,41,30,26,38,44,29,33]);
   const [threatLevel, setThreatLevel] = useState(1);
   const [tier, setTier] = useState(1);
-  const [tick, setTick] = useState(0);
+  const tickRef = useRef(0);
   const [defenseLog, setDefenseLog] = useState([]);
   const [campaignCount, setCampaignCount] = useState(0);
   const [showAlert, setShowAlert] = useState(false);
@@ -629,12 +629,14 @@ export default function CommandCenter() {
   // Main simulation loop
   useEffect(() => {
     const interval = setInterval(() => {
+      const currentTick = tickRef.current;
+      tickRef.current = currentTick + 1;
+
       const atk = generateAttack();
-      atk.tier = Math.min(5, Math.max(1, Math.round(1 + tick * 0.04 + (Math.random()-0.5))));
+      atk.tier = Math.min(5, Math.max(1, Math.round(1 + currentTick * 0.04 + (Math.random()-0.5))));
       atk.soph = Math.min(10, atk.tier * 2 + randInt(0,2));
 
       setAttacks(prev => [atk, ...prev.slice(0, 59)]);
-      setTick(t => t + 1);
       setStats(prev => ({
         total:    prev.total + 1,
         blocked:  prev.blocked + (atk.blocked ? 1 : 0),
@@ -648,7 +650,7 @@ export default function CommandCenter() {
         const newLv = Math.min(5, Math.max(0, lv + (atk.soph > 7 ? 1 : atk.soph < 3 ? -0.5 : 0)));
         return newLv;
       });
-      setTier(Math.min(5, 1 + Math.floor(tick * 0.04)));
+      setTier(Math.min(5, 1 + Math.floor(currentTick * 0.04)));
 
       // Defense log
       const logEntry = {
@@ -671,7 +673,7 @@ export default function CommandCenter() {
       }
 
       // Campaign detection (every 20 ticks)
-      if (tick % 20 === 0 && tick > 0) {
+      if (currentTick % 20 === 0 && currentTick > 0) {
         setCampaignCount(c => c + 1);
         const camThreat = randItem(THREAT_TYPES);
         setShowAlert(true);
@@ -680,7 +682,7 @@ export default function CommandCenter() {
       }
     }, 1400);
     return () => clearInterval(interval);
-  }, [tick]);
+  }, []);
 
   const blockRate = stats.total > 0 ? Math.round((stats.blocked / stats.total) * 100) : 100;
   const sophAvg = sophHistory.length ? +(sophHistory.reduce((a,b)=>a+b,0)/sophHistory.length).toFixed(1) : 0;
