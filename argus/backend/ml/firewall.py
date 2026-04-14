@@ -193,7 +193,9 @@ class InputFirewall:
         }
 
     def _ml_scan(self, text: str) -> Dict[str, Any]:
-        """Run ONNX ML classifier on input text."""
+        """Run ONNX ML classifier on input text.
+        Uses dynamic input names from the loaded model for DeBERTa-v3 compatibility.
+        """
         try:
             tokenizer = self.models.get_tokenizer()
             session = self.models.get_onnx_session()
@@ -201,17 +203,29 @@ class InputFirewall:
             if not tokenizer or not session:
                 return {"blocked": False, "score": 0, "threat_type": None, "method": "ML_UNAVAILABLE"}
 
-            # Tokenize
+            # Tokenize — use model's max_length (512 for DeBERTa-v3)
+            max_len = getattr(self.models, "max_length", 512)
             inputs = tokenizer(
                 text, return_tensors="np",
-                truncation=True, max_length=256, padding="max_length"
+                truncation=True, max_length=max_len, padding="max_length"
             )
 
-            # Run ONNX inference
-            ort_inputs = {
-                "input_ids": inputs["input_ids"].astype(np.int64),
-                "attention_mask": inputs["attention_mask"].astype(np.int64),
-            }
+            # Build feed dict dynamically from model's declared inputs.
+            # DeBERTa-v3 may require: input_ids, attention_mask, token_type_ids
+            # DistilBERT only needs: input_ids, attention_mask
+            onnx_input_names = getattr(self.models, "onnx_input_names", [])
+            ort_inputs = {}
+            for name in onnx_input_names:
+                if name in inputs:
+                    ort_inputs[name] = inputs[name].astype(np.int64)
+
+            # Fallback: if no declared names, use standard pair
+            if not ort_inputs:
+                ort_inputs = {
+                    "input_ids": inputs["input_ids"].astype(np.int64),
+                    "attention_mask": inputs["attention_mask"].astype(np.int64),
+                }
+
             outputs = session.run(None, ort_inputs)
             
             # Softmax to get probabilities
@@ -224,7 +238,7 @@ class InputFirewall:
                     "blocked": True,
                     "score": injection_prob,
                     "threat_type": "ML_DETECTED_INJECTION",
-                    "method": "ONNX_ML_CLASSIFIER",
+                    "method": "ONNX_DEBERTA_V3",
                     "details": f"ML confidence: {injection_prob:.4f} (threshold: {self._ml_threshold})",
                 }
 
@@ -232,7 +246,7 @@ class InputFirewall:
                 "blocked": False,
                 "score": injection_prob,
                 "threat_type": None,
-                "method": "ONNX_ML_CLASSIFIER",
+                "method": "ONNX_DEBERTA_V3",
             }
 
         except Exception as e:

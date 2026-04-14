@@ -45,6 +45,8 @@ class ModelLoader:
         self.onnx_session: Optional[any] = None
         self.tokenizer: Optional[any] = None
         self.ml_ready = False
+        self.onnx_input_names: list = []  # Populated after ONNX load
+        self.max_length = 512  # DeBERTa-v3 supports 512 tokens
         
         Path(self.model_dir).mkdir(parents=True, exist_ok=True)
         self._load_models()
@@ -95,8 +97,10 @@ class ModelLoader:
                 path,
                 providers=["CPUExecutionProvider"]
             )
+            # Cache input names for dynamic feed dict construction
+            self.onnx_input_names = [inp.name for inp in self.onnx_session.get_inputs()]
             self.ml_ready = True
-            log.info(f"✅ ONNX model loaded: {path}")
+            log.info(f"✅ ONNX model loaded: {path} (inputs: {self.onnx_input_names})")
         except Exception as e:
             log.warning(f"⚠️ ONNX load failed: {e}")
             self.ml_ready = False
@@ -131,12 +135,14 @@ class ModelLoader:
             self._load_tokenizer_fallback()
 
     def _load_tokenizer_fallback(self):
-        """Fallback to distilbert-base-uncased tokenizer."""
+        """Fallback to the DeBERTa prompt-injection tokenizer from HuggingFace."""
         if not TOKENIZER_AVAILABLE:
             return
         try:
-            self.tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
-            log.info("✅ Fallback tokenizer loaded (distilbert-base-uncased)")
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                "protectai/deberta-v3-base-prompt-injection-v2"
+            )
+            log.info("✅ Fallback tokenizer loaded (deberta-v3-base-prompt-injection-v2)")
         except Exception as e:
             log.warning(f"⚠️ Fallback tokenizer failed: {e}")
 
