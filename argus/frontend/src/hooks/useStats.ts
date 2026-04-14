@@ -53,10 +53,19 @@ export function useStats(): StatsState {
 
     async function poll() {
       try {
+        const apiKey = localStorage.getItem('ARGUS_API_KEY') || '';
+        const headers: Record<string, string> = {};
+        if (apiKey) headers['X-API-Key'] = apiKey;
         const res = await fetch(`${API_URL}/api/v1/analytics/stats`, {
           signal: controller.signal,
+          headers,
         });
-        if (!res.ok || !active) return;
+        if (!active) return;
+        if (!res.ok) {
+          // Non-2xx: backoff but keep polling
+          currentInterval = Math.min(currentInterval * 2, MAX_INTERVAL);
+          return;
+        }
         const data = await res.json();
         if (!active) return;
 
@@ -120,11 +129,11 @@ export function useStats(): StatsState {
 
         // Exponential backoff: 3s → 6s → 12s → 24s → capped at 30s
         currentInterval = Math.min(currentInterval * 2, MAX_INTERVAL);
-      }
-
-      // Schedule next poll only after current one completes (no overlap)
-      if (active) {
-        setTimeout(poll, currentInterval);
+      } finally {
+        // Schedule next poll ALWAYS (unless component unmounted)
+        if (active) {
+          setTimeout(poll, currentInterval);
+        }
       }
     }
 

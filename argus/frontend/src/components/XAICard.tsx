@@ -16,8 +16,8 @@ function XAICardInner({ attack }: XAICardProps) {
   // which layer triggered, and attack.soph indicates sophistication.
   const layerScores = useMemo(() => {
     const s = attack.score;
-    const isRegex = attack.layer === 'INPUT_FIREWALL' || attack.layer === 'INPUT';
-    const isML = attack.layer === 'ONNX_ML_CLASSIFIER';
+    const isRegex = attack.layer === 'INPUT_FIREWALL' || attack.layer === 'INPUT' || attack.layer === 'REGEX_ENGINE';
+    const isML = attack.layer === 'ONNX_DEBERTA_V3';
     const isAudit = attack.layer === 'OUTPUT' || attack.layer === 'OUTPUT_AUDITOR';
 
     return [

@@ -14,10 +14,10 @@ from fastapi import APIRouter, Request
 try:
     from slowapi import Limiter
     from slowapi.util import get_remote_address
+    _limiter = Limiter(key_func=get_remote_address)
 
     def _rate_limit(limit_string: str):
         """Return rate-limit decorator, or no-op if slowapi unavailable."""
-        _limiter = Limiter(key_func=get_remote_address)
         return _limiter.limit(limit_string)
 except ImportError:
     def _rate_limit(_: str):

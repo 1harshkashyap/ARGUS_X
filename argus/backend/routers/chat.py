@@ -120,7 +120,8 @@ async def chat(req: ChatRequest, request: Request):
         # Log the bypass event for audit trail — never silent
         ev = _build_event(
             req.user_id, sid, req.message, "DEMO_BYPASS",
-            None, 0, "NONE", elapsed, "DEMO_BYPASS"
+            None, 0, "NONE", elapsed, "DEMO_BYPASS",
+            org_id=req.org_id
         )
         await app.state.db.log_event(ev)
         return ChatResponse(
@@ -169,7 +170,7 @@ async def chat(req: ChatRequest, request: Request):
             req.user_id, sid, req.message, "BLOCKED",
             fw["threat_type"], fw["score"], "INPUT", elapsed,
             fw.get("method", ""), sophistication, fingerprint, mutations,
-            explanation, session_level
+            explanation, session_level, org_id=req.org_id
         )
 
         # ── LAYER 1: DATABASE + REALTIME ─────────────────────────────────
@@ -221,7 +222,7 @@ async def chat(req: ChatRequest, request: Request):
             req.user_id, sid, req.message, "SANITIZED",
             audit["flag_reason"], audit["confidence"], "OUTPUT",
             elapsed, "OUTPUT_AUDITOR", explanation=xai.get("primary_reason", audit.get("explanation")),
-            session_threat_level=session_level
+            session_threat_level=session_level, org_id=req.org_id
         )
         await app.state.db.log_event(ev)
         await app.state.db.increment_stat("sanitized")
@@ -253,7 +254,7 @@ async def chat(req: ChatRequest, request: Request):
     ev = _build_event(
         req.user_id, sid, req.message, "CLEAN",
         None, fw["score"], "NONE", elapsed, fw.get("method", ""),
-        session_threat_level=session_level
+        session_threat_level=session_level, org_id=req.org_id
     )
     await app.state.db.log_event(ev)
     await app.state.db.increment_stat("clean")
