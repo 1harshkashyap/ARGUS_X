@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════
    ARGUS-X — Global Styles
-   Keyframes, scrollbar, font imports, resets
+   Keyframes, scrollbar, font imports, resets, responsive grid
    ═══════════════════════════════════════════════════════════════════════ */
 
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700;900&family=Orbitron:wght@400;700;900&display=swap');
@@ -18,6 +18,7 @@ html, body, #root {
   background: #030508;
 }
 
+/* ── Keyframes ─────────────────────────────────────────────────────── */
 @keyframes slideLeft {
   from { opacity: 0; transform: translateX(-12px); }
   to   { opacity: 1; transform: none; }
@@ -43,6 +44,11 @@ html, body, #root {
   to   { opacity: 1; transform: translate(-50%, 0); }
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Scrollbar ─────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 3px;
 }
@@ -51,3 +57,54 @@ html, body, #root {
   background: #1a2845;
   border-radius: 2px;
 }
+
+/* ── Responsive Grid ───────────────────────────────────────────────── */
+/* Default: full 3-column layout (desktop/laptop) */
+.argus-grid {
+  grid-template-columns: minmax(180px, 240px) 1fr minmax(180px, 220px);
+  grid-template-rows: 1fr minmax(140px, 180px);
+}
+
+/* Tablet: stack right panel below, 2-column */
+@media (max-width: 1024px) {
+  .argus-grid {
+    grid-template-columns: minmax(160px, 200px) 1fr;
+    grid-template-rows: 1fr minmax(120px, 160px) auto;
+  }
+  /* Right panel spans full width at bottom */
+  .argus-grid > div:nth-child(3) {
+    grid-row: 3;
+    grid-column: 1 / -1;
+    max-height: 300px;
+  }
+}
+
+/* Small tablet/portrait: single column */
+@media (max-width: 768px) {
+  .argus-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto;
+  }
+  .argus-grid > div {
+    grid-row: auto !important;
+    grid-column: auto !important;
+    max-height: 400px;
+  }
+}
+
+/* ── Reusable Panel Classes ────────────────────────────────────────── */
+.argus-panel {
+  background: #080d1c;
+  border: 1px solid #1a2845;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.argus-section-header {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 8px;
+  letter-spacing: 0.15em;
+  color: #3a5070;
+  margin-bottom: 7px;
+}
+

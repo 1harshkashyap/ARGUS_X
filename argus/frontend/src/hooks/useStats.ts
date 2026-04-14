@@ -22,6 +22,8 @@ interface StatsState {
   alertHistory: AlertEntry[];
   showAlertHistory: boolean;
   setShowAlertHistory: (v: boolean | ((prev: boolean) => boolean)) => void;
+  redAgentRunning: boolean;
+  loading: boolean;
 }
 
 export function useStats(): StatsState {
@@ -42,6 +44,8 @@ export function useStats(): StatsState {
   const [threatVelocity, setThreatVelocity] = useState<Record<string, number>>({});
   const [lastPatch, setLastPatch] = useState<PatchEvent | null>(null);
   const [showPatch, setShowPatch] = useState(false);
+  const [redAgentRunning, setRedAgentRunning] = useState(false);
+  const [loading, setLoading] = useState(true);
   const lastPatchTsRef = useRef<string>('');
 
   useEffect(() => {
@@ -80,6 +84,16 @@ export function useStats(): StatsState {
           bypasses: data.stats?.bypasses_found || data.bypasses_found || 0,
           patched: data.blue_agent?.auto_patches || data.stats?.bypasses_found || 0,
         });
+
+        // Red agent status from backend
+        if (data.agent && typeof data.agent.running === 'boolean') {
+          setRedAgentRunning(data.agent.running);
+        } else {
+          // If agent data exists at all, assume running
+          setRedAgentRunning(!!data.agent);
+        }
+
+        setLoading(false);
 
         if (data.battle) {
           setTier(data.battle.red_tier || 1);
@@ -158,5 +172,7 @@ export function useStats(): StatsState {
     alertHistory,
     showAlertHistory,
     setShowAlertHistory,
+    redAgentRunning,
+    loading,
   };
 }

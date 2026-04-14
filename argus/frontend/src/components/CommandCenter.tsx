@@ -36,6 +36,7 @@ export default function CommandCenter() {
     lastPatch, showPatch,
     showAlert, alertMsg, alertHistory,
     showAlertHistory, setShowAlertHistory,
+    redAgentRunning, loading,
   } = useStats();
 
   // ── Derived values ─────────────────────────────────────────────────
@@ -68,6 +69,9 @@ export default function CommandCenter() {
 
   return (
     <div
+      className="argus-root"
+      role="application"
+      aria-label="ARGUS-X Defense Command Center"
       style={{
         background: '#030508',
         color: '#ddeeff',
@@ -137,15 +141,18 @@ export default function CommandCenter() {
         </div>
 
         {/* Status pills */}
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8 }} role="status" aria-live="polite">
           {[
             connected
               ? { color: '#00e676', label: 'ARGUS ONLINE', fast: false }
               : { color: '#ffab00', label: 'RECONNECTING…', fast: true },
-            { color: '#ff1744', label: 'RED AGENT LIVE', fast: true },
+            redAgentRunning
+              ? { color: '#ff1744', label: 'RED AGENT LIVE', fast: true }
+              : { color: '#3a5070', label: 'RED AGENT IDLE', fast: false },
           ].map((p) => (
             <div
               key={p.label}
+              aria-label={p.label}
               style={{
                 display: 'flex', alignItems: 'center', gap: 5, padding: '3px 10px',
                 borderRadius: 12, background: p.color + '12', border: `1px solid ${p.color}30`,
@@ -155,7 +162,8 @@ export default function CommandCenter() {
               <div
                 style={{
                   width: 6, height: 6, borderRadius: '50%', background: p.color,
-                  animation: `pulse ${p.fast ? '0.7s' : '1.4s'} ease-in-out infinite`,
+                  animation: p.fast ? 'pulse 0.7s ease-in-out infinite' : 'none',
+                  opacity: p.fast ? undefined : 0.6,
                 }}
               />
               {p.label}
@@ -165,11 +173,9 @@ export default function CommandCenter() {
       </div>
 
       {/* ── MAIN GRID ── */}
-      <div
+      <div className="argus-grid"
         style={{
           flex: 1, display: 'grid',
-          gridTemplateColumns: 'minmax(180px, 240px) 1fr minmax(180px, 220px)',
-          gridTemplateRows: '1fr minmax(140px, 180px)',
           gap: '1px', background: '#0d1628',
           overflow: 'hidden', minHeight: 0,
         }}
@@ -205,7 +211,14 @@ export default function CommandCenter() {
           >
             {attacks.length === 0 ? (
               <div style={{ fontFamily: fonts.mono, fontSize: 9, color: '#2a4060', textAlign: 'center', padding: '20px 0' }}>
-                Waiting for live feed…
+                {loading ? (
+                  <>
+                    <div style={{ width: 16, height: 16, border: '2px solid #1a2845', borderTop: '2px solid #00e5ff', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 8px' }} />
+                    Connecting to live feed…
+                  </>
+                ) : (
+                  'Waiting for events…'
+                )}
               </div>
             ) : (
               attacks.slice(0, 25).map((a) => <FeedItem key={a.id} attack={a} />)

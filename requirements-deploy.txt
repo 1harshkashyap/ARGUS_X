@@ -1,35 +1,35 @@
-# ARGUS-X Backend — Production Deployment Dependencies
+# ARGUS-X Backend — Production Deployment Dependencies (pinned)
 # Includes ONNX ML inference (no PyTorch) — enables ML classifier in production
 # Excludes sentence-transformers (pulls PyTorch ~1.5GB) — those features have fallbacks
 
-fastapi>=0.104.0
-uvicorn[standard]>=0.24.0
-pydantic>=2.5.0
-python-dotenv>=1.0.0
+fastapi==0.115.12
+uvicorn[standard]==0.34.3
+pydantic==2.11.3
+python-dotenv==1.1.0
 
 # Supabase
-supabase>=2.3.0
-postgrest>=0.13.0
+supabase==2.15.2
+postgrest==0.19.4
 
 # LLM
-litellm>=1.16.0
+litellm==1.73.6
 
 # Utilities
-httpx>=0.25.0
-aiofiles>=23.2.0
-python-multipart>=0.0.6
+httpx==0.28.1
+aiofiles==24.1.0
+python-multipart==0.0.20
 
 # Session persistence
-redis>=5.0.0
+redis==5.3.0
 
 # ML / ONNX inference (no PyTorch dependency)
-onnxruntime>=1.20.0
-transformers>=4.36.0
-tokenizers>=0.15.0
-numpy>=1.26.0
-scikit-learn>=1.3.0
-huggingface-hub>=0.20.0
+onnxruntime==1.22.0
+transformers==4.52.4
+tokenizers==0.21.1
+numpy==2.2.6
+scikit-learn==1.6.1
+huggingface-hub==0.32.4
 
 # Monitoring + Security
-sentry-sdk[fastapi]>=1.39.0
-slowapi>=0.1.9
+sentry-sdk[fastapi]==2.23.1
+slowapi==0.1.9
