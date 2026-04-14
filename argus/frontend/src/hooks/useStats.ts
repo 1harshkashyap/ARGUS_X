@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from 'react';
 import type { Stats, AlertEntry } from '../types';
 import { API_URL } from '../utils/config';
 import type { PatchEvent } from '../components/PatchBanner';
+import { getApiKey } from '../utils/apiKey';
 
 interface StatsState {
   stats: Stats;
@@ -53,7 +54,7 @@ export function useStats(): StatsState {
 
     async function poll() {
       try {
-        const apiKey = localStorage.getItem('ARGUS_API_KEY') || '';
+        const apiKey = getApiKey();
         const headers: Record<string, string> = {};
         if (apiKey) headers['X-API-Key'] = apiKey;
         const res = await fetch(`${API_URL}/api/v1/analytics/stats`, {

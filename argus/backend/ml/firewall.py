@@ -72,7 +72,9 @@ STATIC_RULES = [
      "type": "OBFUSCATED_INJECTION", "severity": 0.80},
     
     # Context Overflow (A7)
-    {"pattern": r"(.{500,})(ignore|override|forget|disregard|new instructions)",
+    # NOTE: The original pattern r"(.{500,})(ignore|...)" is ReDoS-vulnerable
+    # due to catastrophic backtracking. Use a non-greedy approach instead.
+    {"pattern": r"(?s).{500}.*?(?:ignore|override|forget|disregard|new instructions)",
      "type": "CONTEXT_OVERFLOW", "severity": 0.80},
     
     # Social Engineering (A8)

@@ -95,21 +95,22 @@ async def redteam_test(
         "preview": hashlib.sha256(req.message.encode()).hexdigest()[:16] + " [REDACTED]",
     })
 
-    return {
-        "blocked": fw_result["blocked"],
-        "sanitized": False,
-        "threat_score": fw_result.get("score", 0),
-        "score": fw_result.get("score", 0),
-        "threat_type": threat_type,
-        "method": fw_result.get("method", ""),
-        "sophistication_score": fp.get("sophistication_score", 0),
-        "fingerprint_id": fp.get("fingerprint_id", ""),
-        "attack_fingerprint": fp.get("fingerprint_id", ""),
-        "explanation": fp.get("explanation", ""),
-        "mutations_preblocked": mutations,
-        "xai": xai,
-        "latency_ms": round(elapsed, 1),
-    }
+    # SECURITY: Return minimal info to prevent oracle-style probing.
+    # Attackers must not be able to calibrate payloads using response details.
+    if fw_result["blocked"]:
+        return {
+            "blocked": True,
+            "threat_score": fw_result.get("score", 0),
+            "threat_type": threat_type,
+            "mutations_preblocked": mutations,
+            "latency_ms": round(elapsed, 1),
+        }
+    else:
+        # Non-blocked: return even less — no score, no method, no explanation
+        return {
+            "blocked": False,
+            "latency_ms": round(elapsed, 1),
+        }
 
 
 @router.get("/redteam/bypass-history")

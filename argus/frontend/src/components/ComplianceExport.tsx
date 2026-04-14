@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { fonts } from '../theme';
 import { API_URL } from '../utils/config';
+import { getApiKey } from '../utils/apiKey';
 
 export function ComplianceExport() {
   const [loading, setLoading] = useState(false);
@@ -8,7 +9,7 @@ export function ComplianceExport() {
   const handleExport = useCallback(async () => {
     setLoading(true);
     try {
-      const apiKey = localStorage.getItem('ARGUS_API_KEY') || '';
+      const apiKey = getApiKey();
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (apiKey) headers['X-API-Key'] = apiKey;
 

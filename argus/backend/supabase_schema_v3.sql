@@ -230,8 +230,26 @@ CREATE POLICY "Anon read evolution"      ON evolution_log       FOR SELECT TO an
 CREATE POLICY "Anon read campaigns"      ON campaigns           FOR SELECT TO anon USING (true);
 CREATE POLICY "Anon read fingerprints"   ON attack_fingerprints FOR SELECT TO anon USING (true);
 
--- Events: anon can read but NOT the preview field (handled by view below)
-CREATE POLICY "Anon read events"         ON events              FOR SELECT TO anon USING (true);
+-- SECURITY: Events table — anon reads through a secure view that strips
+-- raw preview text. Direct table access is service_role only.
+CREATE POLICY "Service only events"      ON events              FOR SELECT TO authenticated USING (auth.role() = 'service_role');
+
+-- Create a safe view for anon reads (no raw payload previews)
+CREATE OR REPLACE VIEW events_safe AS
+SELECT
+    id, ts, user_id, session_id, org_id,
+    action, threat_type, score, layer, latency_ms,
+    method, sophistication, mutations_preblocked,
+    session_threat_level,
+    -- Redact preview: only show for CLEAN events, hash for threats
+    CASE
+        WHEN action = 'CLEAN' THEN LEFT(preview, 50)
+        ELSE LEFT(md5(COALESCE(preview, '')), 16) || ' [REDACTED]'
+    END AS preview
+FROM events;
+
+-- Grant anon access to the safe view only
+GRANT SELECT ON events_safe TO anon;
 
 -- XAI decisions: anon can read reasoning (no raw payloads after chat.py redaction)
 CREATE POLICY "Anon read xai"            ON xai_decisions       FOR SELECT TO anon USING (true);

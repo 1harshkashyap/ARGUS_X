@@ -8,6 +8,7 @@ import type { AttackEvent, LogEntry, WSMessage } from '../types';
 import { WS_URL } from '../utils/config';
 import { normalizeEvent } from '../utils/sanitize';
 import { uid } from '../utils/helpers';
+import { getApiKey } from '../utils/apiKey';
 
 interface CampaignWsAlert {
   pattern: string;
@@ -53,7 +54,7 @@ export function useRealtimeFeed(): RealtimeFeedState {
       ws.onopen = () => {
         // Send auth message as first frame (auth-after-connect protocol)
         const apiKey = typeof window !== 'undefined'
-          ? localStorage.getItem('ARGUS_API_KEY') || ''
+          ? getApiKey()
           : '';
         if (apiKey) {
           ws!.send(JSON.stringify({ type: 'auth', token: apiKey }));

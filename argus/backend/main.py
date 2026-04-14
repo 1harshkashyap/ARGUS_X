@@ -348,14 +348,26 @@ async def _broadcast(app_instance, event_type: str, data: dict):
 
 
 # ─── Health ───────────────────────────────────────────────────────────────────
+# SECURITY: Public health returns minimal info only.
+# Detailed layer/agent info requires authentication to prevent architecture mapping.
 @app.get("/health")
-async def health():
-    return {
+async def health(request: Request):
+    # Check if request is authenticated
+    _expected = os.getenv("API_KEY", "")
+    _provided = request.headers.get("x-api-key", "")
+    is_authenticated = (not _expected) or (_provided == _expected)
+
+    # Public response: minimal status for load balancers / uptime monitors
+    response = {
         "status": "operational",
         "service": "ARGUS-X",
         "version": "3.0.0",
-        "tagline": "The AI that defends AI",
-        "layers": {
+        "ts": datetime.utcnow().isoformat() + "Z",
+    }
+
+    # Authenticated response: full internal details
+    if is_authenticated:
+        response["layers"] = {
             "L1_database": app.state.db.available,
             "L2_firewall": app.state.firewall.mode(),
             "L2_llm": app.state.llm.get_mode(),
@@ -366,15 +378,15 @@ async def health():
             "L6_evolution": True,
             "L6_clusterer": True,
             "L7_xai": True,
-        },
-        "agents": {
+        }
+        response["agents"] = {
             "red_team": app.state.red_agent.status(),
             "blue_team": app.state.blue_agent.status(),
             "correlator": app.state.correlator.status(),
-        },
-        "ws_connections": len(app.state.ws_clients),
-        "ts": datetime.utcnow().isoformat() + "Z",
-    }
+        }
+        response["ws_connections"] = len(app.state.ws_clients)
+
+    return response
 
 
 @app.exception_handler(Exception)

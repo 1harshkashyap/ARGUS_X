@@ -57,12 +57,20 @@ class SupabaseClient:
                 if anon_key:
                     self._read_client = create_client(url, anon_key)
                     log.info("✅ Supabase read client connected (anon — RLS enforced)")
+                elif os.getenv("ENV", "development").lower() == "production":
+                    # SECURITY: In production, NEVER fall back to service key for reads.
+                    # This would bypass RLS and expose all data.
+                    log.error(
+                        "🚨 SUPABASE_ANON_KEY not set in production — reads DISABLED. "
+                        "Set SUPABASE_ANON_KEY to enable read operations with RLS."
+                    )
+                    self._read_client = None
                 else:
-                    # Graceful degradation: use write client for reads in dev/demo
+                    # Dev/demo only: use write client with warning
                     self._read_client = self._write_client
                     log.warning(
                         "⚠️ SUPABASE_ANON_KEY not set — reads will use service role key "
-                        "(RLS bypassed). Set SUPABASE_ANON_KEY for production security."
+                        "(RLS bypassed). This is ONLY acceptable in development."
                     )
 
                 self.available = True
