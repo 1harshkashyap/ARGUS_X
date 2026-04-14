@@ -11,11 +11,13 @@ postgrest>=0.13.0
 # LLM
 litellm>=1.16.0
 
-# ML / ONNX
+# ML / ONNX (DeBERTa-v3 prompt injection model)
 onnxruntime>=1.20.0
 transformers>=4.36.0
 tokenizers>=0.15.0
+sentencepiece>=0.1.99
 numpy>=1.26.0
+# optimum[onnxruntime]  # Only needed for one-time ONNX export (scripts/export_onnx.py)
 
 # NLP / Security
 sentence-transformers>=2.2.2
