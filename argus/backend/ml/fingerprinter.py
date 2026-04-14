@@ -113,7 +113,11 @@ class AttackFingerprinter:
             "latency_ms":           round((time.perf_counter() - t0) * 1000, 2),
         }
         
-        # Cache by fingerprint for cross-session correlation
+        # Cache by fingerprint for cross-session correlation (capped at 1000)
+        if len(self.fingerprint_cache) > 1000:
+            oldest_keys = list(self.fingerprint_cache.keys())[:len(self.fingerprint_cache) - 1000]
+            for k in oldest_keys:
+                del self.fingerprint_cache[k]
         self.fingerprint_cache[fingerprint_id] = result
         
         log.info(f"Fingerprint: {fingerprint_id} | Sophistication: {score}/10")

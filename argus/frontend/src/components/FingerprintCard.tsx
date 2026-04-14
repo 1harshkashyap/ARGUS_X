@@ -43,7 +43,9 @@ function FingerprintCardInner({ attack }: FingerprintCardProps) {
     // Lower signals trigger for lower soph, higher for higher
     for (let i = 0; i < SIGNAL_NAMES.length; i++) {
       const threshold = Math.ceil((i + 1) / 2);
-      if (soph >= threshold && Math.random() > 0.3) {
+      // Deterministic pseudo-random seeded from attack.id + signal index
+      const seed = ((attack.id * 2654435761 + i * 340573) >>> 0) % 100;
+      if (soph >= threshold && seed > 30) {
         active.add(i);
       }
     }
