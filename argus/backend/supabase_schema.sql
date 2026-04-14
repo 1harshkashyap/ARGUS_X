@@ -143,6 +143,14 @@ CREATE TABLE IF NOT EXISTS knowledge_base (
 );
 
 -- ── ROW LEVEL SECURITY ────────────────────────────────────────────────────
+-- SECURITY: Every table has RLS enabled. Policies enforce least-privilege:
+--   • anon key  → limited SELECT on dashboard-safe tables only
+--   • service_role → full access (bypasses RLS by default, but explicit
+--     policies ensure defense-in-depth if bypass is misconfigured)
+--
+-- CRITICAL: Sensitive tables (red_team_sessions, dynamic_rules,
+-- knowledge_base) are NEVER readable by anon.
+
 ALTER TABLE events              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stats               ENABLE ROW LEVEL SECURITY;
 ALTER TABLE red_team_sessions   ENABLE ROW LEVEL SECURITY;
@@ -151,23 +159,41 @@ ALTER TABLE campaigns           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dynamic_rules       ENABLE ROW LEVEL SECURITY;
 ALTER TABLE knowledge_base      ENABLE ROW LEVEL SECURITY;
 
--- Public read (dashboard uses anon key to read)
-CREATE POLICY "Public read events"      ON events              FOR SELECT USING (true);
-CREATE POLICY "Public read stats"       ON stats               FOR SELECT USING (true);
-CREATE POLICY "Public read red_team"    ON red_team_sessions   FOR SELECT USING (true);
-CREATE POLICY "Public read fingerprints" ON attack_fingerprints FOR SELECT USING (true);
-CREATE POLICY "Public read campaigns"   ON campaigns           FOR SELECT USING (true);
-CREATE POLICY "Public read rules"       ON dynamic_rules       FOR SELECT USING (true);
-CREATE POLICY "Public read knowledge"   ON knowledge_base      FOR SELECT USING (true);
+-- ── ANON READ POLICIES (dashboard-safe tables only) ──────────────────────
+CREATE POLICY "Anon read events"         ON events              FOR SELECT TO anon USING (true);
+CREATE POLICY "Anon read stats"          ON stats               FOR SELECT TO anon USING (true);
+CREATE POLICY "Anon read fingerprints"   ON attack_fingerprints FOR SELECT TO anon USING (true);
+CREATE POLICY "Anon read campaigns"      ON campaigns           FOR SELECT TO anon USING (true);
 
--- Service role writes (backend uses service_role key)
-CREATE POLICY "Service write events"    ON events              FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service write stats"     ON stats               FOR UPDATE USING (true);
-CREATE POLICY "Service write red_team"  ON red_team_sessions   FOR INSERT WITH CHECK (true);
-CREATE POLICY "Service write fingerprints" ON attack_fingerprints FOR ALL USING (true);
-CREATE POLICY "Service write campaigns" ON campaigns           FOR ALL USING (true);
-CREATE POLICY "Service write rules"     ON dynamic_rules       FOR ALL USING (true);
-CREATE POLICY "Service write knowledge" ON knowledge_base      FOR ALL USING (true);
+-- ── SENSITIVE TABLES: SERVICE ROLE ONLY ──────────────────────────────────
+CREATE POLICY "Service only red_team"    ON red_team_sessions   FOR SELECT TO authenticated USING (auth.role() = 'service_role');
+CREATE POLICY "Service only rules"       ON dynamic_rules       FOR SELECT TO authenticated USING (auth.role() = 'service_role');
+CREATE POLICY "Service only knowledge"   ON knowledge_base      FOR SELECT TO authenticated USING (auth.role() = 'service_role');
+
+-- ── SERVICE ROLE WRITE POLICIES ──────────────────────────────────────────
+CREATE POLICY "Service write events"       ON events              FOR INSERT TO authenticated WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY "Service write stats"        ON stats               FOR UPDATE TO authenticated USING (auth.role() = 'service_role');
+CREATE POLICY "Service write red_team"     ON red_team_sessions   FOR INSERT TO authenticated WITH CHECK (auth.role() = 'service_role');
+CREATE POLICY "Service write fingerprints" ON attack_fingerprints FOR ALL    TO authenticated USING (auth.role() = 'service_role');
+CREATE POLICY "Service write campaigns"    ON campaigns           FOR ALL    TO authenticated USING (auth.role() = 'service_role');
+CREATE POLICY "Service write rules"        ON dynamic_rules       FOR ALL    TO authenticated USING (auth.role() = 'service_role');
+CREATE POLICY "Service write knowledge"    ON knowledge_base      FOR ALL    TO authenticated USING (auth.role() = 'service_role');
+
+-- ── SAFE VIEW: events without raw previews ───────────────────────────────
+CREATE OR REPLACE VIEW events_safe WITH (security_barrier = true) AS
+SELECT
+  id, created_at, user_id, session_id, action, threat_type,
+  score, layer, latency_ms, method, sophistication_score,
+  attack_fingerprint, mutations_preblocked, session_threat_level
+FROM events;
+
+-- ── SAFE VIEW: bypass history (no raw attack_text) ───────────────────────
+CREATE OR REPLACE VIEW bypass_history_safe WITH (security_barrier = true) AS
+SELECT
+  id, created_at, attack_type, tier, bypassed, auto_patched,
+  cycle, score, latency_ms
+FROM red_team_sessions
+WHERE bypassed = true AND auto_patched = true;
 
 -- ── ENABLE REALTIME ───────────────────────────────────────────────────────
 -- IMPORTANT: Also enable in UI: Table Editor → each table → Realtime → ON
