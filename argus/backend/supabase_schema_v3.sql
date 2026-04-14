@@ -11,8 +11,9 @@ CREATE TABLE IF NOT EXISTS events (
   created_at           TIMESTAMPTZ      DEFAULT NOW() NOT NULL,
   user_id              TEXT             DEFAULT 'anonymous',
   session_id           TEXT,
+  org_id               TEXT             DEFAULT 'default',
   preview              TEXT,
-  action               TEXT             NOT NULL CHECK (action IN ('BLOCKED','SANITIZED','CLEAN')),
+  action               TEXT             NOT NULL CHECK (action IN ('BLOCKED','SANITIZED','CLEAN','DEMO_BYPASS')),
   threat_type          TEXT,
   score                DOUBLE PRECISION DEFAULT 0,
   layer                TEXT             CHECK (layer IN ('INPUT','OUTPUT','NONE')),
@@ -31,6 +32,7 @@ CREATE INDEX IF NOT EXISTS idx_events_threat_type   ON events (threat_type) WHER
 CREATE INDEX IF NOT EXISTS idx_events_fingerprint   ON events (attack_fingerprint) WHERE attack_fingerprint IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_events_session       ON events (session_id);
 CREATE INDEX IF NOT EXISTS idx_events_sophistication ON events (sophistication_score DESC);
+CREATE INDEX IF NOT EXISTS idx_events_org_id        ON events (org_id);
 
 -- ── STATS TABLE ───────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS stats (

@@ -98,6 +98,7 @@ class SupabaseClient:
                 row = {
                     "user_id":              event.get("user_id", "anonymous"),
                     "session_id":           event.get("session_id"),
+                    "org_id":               event.get("org_id", "default"),
                     "preview":              event.get("preview", ""),
                     "action":               event.get("action", "CLEAN"),
                     "threat_type":          event.get("threat_type"),
