@@ -42,4 +42,4 @@ async def get_evolution(request: Request):
     app = request.app
     if hasattr(app.state, 'evolution'):
         return app.state.evolution.get_evolution_report()
-    return {"current_avg": 0, "trend": "STABLE", "data_points": 0}
+    return {"current_avg": 0, "trend": "STABLE", "threat_level": 1, "data_points": 0}

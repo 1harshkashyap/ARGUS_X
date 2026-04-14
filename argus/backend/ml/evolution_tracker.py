@@ -63,6 +63,7 @@ class EvolutionTracker:
             return {
                 "current_avg": 0,
                 "trend": "STABLE",
+                "threat_level": 1,
                 "is_escalating": False,
                 "escalation_count": 0,
                 "window_size": self.window_size,
