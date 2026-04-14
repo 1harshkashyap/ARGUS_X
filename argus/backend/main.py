@@ -42,22 +42,8 @@ except ImportError:
 
 # Internal imports
 from utils.logger import setup_logger
-from utils.supabase_client import SupabaseClient
-from utils.model_loader import ModelLoader
-from utils.session_store import SessionStore
 from utils.auth import require_api_key, validate_api_key_config
-from ml.firewall import InputFirewall
-from ml.auditor import OutputAuditor
-from ml.llm_core import LLMCore
-from ml.fingerprinter import AttackFingerprinter
-from ml.mutation_engine import SemanticMutationEngine
-from ml.xai_engine import XAIEngine
-from ml.evolution_tracker import EvolutionTracker
-from ml.threat_clusterer import ThreatClusterer
-from agents.red_team_agent import RedTeamAgent
-from agents.blue_agent import BlueAgent
-from agents.battle_engine import BattleEngine
-from agents.threat_correlator import ThreatCorrelator
+from utils.container import init_container
 from routers import chat, redteam, analytics, agents, knowledge, battle, xai, benchmark, compliance
 
 # Optional Sentry
@@ -106,50 +92,39 @@ async def lifespan(app: FastAPI):
     log.info("🛡️  ARGUS-X booting up — initializing all 9 layers...")
 
     # SECURITY: Validate API key configuration before anything else.
-    # Crashes in production if API_KEY is missing. Warns in dev.
     validate_api_key_config()
 
-    # Layer 1: Database
-    app.state.db = SupabaseClient()
+    # Build the service container (constructs all 15 services in dependency order)
+    container = await init_container()
+    app.state.container = container
 
-    # Layer 2: Core Security Pipeline
-    app.state.models = ModelLoader()
-    app.state.firewall = InputFirewall(app.state.models)
-    app.state.auditor = OutputAuditor(app.state.models)
-    app.state.llm = LLMCore()
-
-    # Layer 3: Attack Intelligence
-    app.state.fingerprinter = AttackFingerprinter(app.state.models)
-    app.state.correlator = ThreatCorrelator(app.state.db)
-
-    # Layer 4: Mutation Engine
-    app.state.mutator = SemanticMutationEngine(app.state.models)
-
-    # Layer 5: AI vs AI Battle
-    app.state.red_agent = RedTeamAgent(app.state.db, app.state.firewall, app.state.correlator)
-    app.state.blue_agent = BlueAgent(app.state.firewall, app.state.mutator, app.state.fingerprinter)
-    app.state.battle = BattleEngine(app.state.red_agent, app.state.blue_agent, app.state.db)
-
-    # Layer 6: Learning Layer
-    app.state.evolution = EvolutionTracker()
-    app.state.clusterer = ThreatClusterer(app.state.models)
-
-    # Layer 7: XAI Engine
-    app.state.xai = XAIEngine()
+    # Backward-compat aliases — routers not yet migrated to container
+    # can still use request.app.state.xyz
+    app.state.db = container.db
+    app.state.models = container.models
+    app.state.firewall = container.firewall
+    app.state.auditor = container.auditor
+    app.state.llm = container.llm
+    app.state.fingerprinter = container.fingerprinter
+    app.state.correlator = container.correlator
+    app.state.mutator = container.mutator
+    app.state.red_agent = container.red_agent
+    app.state.blue_agent = container.blue_agent
+    app.state.battle = container.battle
+    app.state.evolution = container.evolution
+    app.state.clusterer = container.clusterer
+    app.state.xai = container.xai
+    app.state.session_store = container.session_store
 
     # WebSocket clients — set + lock for safe concurrent access
     app.state.ws_clients: set[WebSocket] = set()
     app.state.ws_lock = asyncio.Lock()
 
-    # Session threat tracking (Redis-backed, persistent)
-    app.state.session_store = SessionStore()
-    await app.state.session_store.init()
-
     # Load persisted dynamic rules from DB into firewall memory
     try:
-        db_rules = await app.state.db.get_dynamic_rules()
+        db_rules = await container.db.get_dynamic_rules()
         for rule in db_rules:
-            app.state.firewall.add_dynamic_rule(
+            container.firewall.add_dynamic_rule(
                 rule.get("pattern", ""),
                 rule.get("threat_type", "UNKNOWN"),
                 rule.get("severity", 0.85) if "severity" in rule else 0.85,
@@ -159,37 +134,36 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         log.warning(f"Dynamic rules load failed (non-fatal): {e}")
 
-    # Broadcast helper (must be set inside lifespan after state exists)
+    # Broadcast helper
     app.state.broadcast = _broadcast
 
     # Wire broadcast into correlator for real-time campaign push
-    app.state.correlator._broadcast = lambda data: _broadcast(app, "campaign", data)
+    container.correlator._broadcast = lambda data: _broadcast(app, "campaign", data)
 
     # Start autonomous loops — supervised for auto-restart on crash.
-    # Each task uses a lambda factory so the coroutine can be re-created on restart.
     _tasks = [
         asyncio.create_task(supervised_task(
-            lambda: app.state.red_agent.autonomous_loop(), "Red Agent"
+            lambda: container.red_agent.autonomous_loop(), "Red Agent"
         )),
         asyncio.create_task(supervised_task(
-            lambda: app.state.correlator.correlation_loop(), "Threat Correlator"
+            lambda: container.correlator.correlation_loop(), "Threat Correlator"
         )),
         asyncio.create_task(supervised_task(
-            lambda: app.state.battle.start(), "Battle Engine"
+            lambda: container.battle.start(), "Battle Engine"
         )),
     ]
 
     log.info("✅ ARGUS-X fully operational — all 9 layers active")
     yield
     log.info("🔴 ARGUS-X shutting down")
-    # Graceful shutdown: signal loops to stop, then cancel supervisor tasks
-    app.state.red_agent.stop()
-    app.state.correlator.stop()
-    app.state.battle.stop()
+    # Graceful shutdown
+    container.red_agent.stop()
+    container.correlator.stop()
+    container.battle.stop()
     for task in _tasks:
         task.cancel()
     await asyncio.gather(*_tasks, return_exceptions=True)
-    await app.state.session_store.close()
+    await container.shutdown()
 
 
 # ─── App ──────────────────────────────────────────────────────────────────────
