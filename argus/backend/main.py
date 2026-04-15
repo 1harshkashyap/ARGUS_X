@@ -224,14 +224,19 @@ app = FastAPI(
 # ─── CORS ─────────────────────────────────────────────────────────────────────
 # SECURITY: Only the trusted frontend origin is allowed.
 # Set FRONTEND_URL in production (e.g. "https://argus-x.example.com").
-# Defaults to localhost:5173 for local development only.
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+# Auto-detects Railway public domain if available.
+_railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
+_default_frontend = f"https://{_railway_domain}" if _railway_domain else "http://localhost:5173"
+FRONTEND_URL = os.getenv("FRONTEND_URL", _default_frontend)
 
 # Guard: reject wildcard — it must never reach production.
 if FRONTEND_URL.strip() == "*":
     raise RuntimeError("FATAL: FRONTEND_URL must not be '*'. Set a specific origin.")
 
 ALLOWED_ORIGINS = [FRONTEND_URL]
+# Also allow the Railway domain if it differs from FRONTEND_URL
+if _railway_domain and f"https://{_railway_domain}" not in ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS.append(f"https://{_railway_domain}")
 
 app.add_middleware(
     CORSMiddleware,
