@@ -6,7 +6,7 @@ and auto-patches them. This is the "self-hardening" system.
 No other LLM security product does autonomous self-adversarial training.
 """
 import asyncio, random, time, logging, hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Optional
 
 log = logging.getLogger("argus.red_agent")
@@ -93,7 +93,7 @@ class RedTeamAgent:
     async def _run_cycle(self):
         """One cycle: try 10 attacks, report results."""
         self.cycle_count += 1
-        self.last_run = datetime.utcnow().isoformat() + "Z"
+        self.last_run = datetime.now(timezone.utc).isoformat() + "Z"
         
         # Select attacks for this cycle
         batch = random.sample(SEED_ATTACKS, min(10, len(SEED_ATTACKS)))
@@ -107,7 +107,7 @@ class RedTeamAgent:
             # Feed into correlator for campaign detection
             if self.correlator:
                 self.correlator.ingest_event({
-                    "ts": datetime.utcnow().isoformat() + "Z",
+                    "ts": datetime.now(timezone.utc).isoformat() + "Z",
                     "action": "CLEAN" if result["bypassed"] else "BLOCKED",
                     "threat_type": attack["type"],
                     "fingerprint": None,
@@ -123,7 +123,7 @@ class RedTeamAgent:
                     "type": attack["type"],
                     "tier": attack["tier"],
                     "score": result.get("score", 0),
-                    "ts": datetime.utcnow().isoformat() + "Z",
+                    "ts": datetime.now(timezone.utc).isoformat() + "Z",
                 }
                 
                 # Auto-patch immediately
@@ -138,7 +138,7 @@ class RedTeamAgent:
                     "auto_patched": True,
                     "cycle": self.cycle_count,
                     "score": result.get("score", 0),
-                    "ts": datetime.utcnow().isoformat() + "Z"
+                    "ts": datetime.now(timezone.utc).isoformat() + "Z"
                 })
                 
                 log.warning(f"⚠️ BYPASS FOUND + AUTO-PATCHED: {attack['type']} | Tier {attack['tier']}")
@@ -171,7 +171,7 @@ class RedTeamAgent:
             "type":   attack["type"],
             "tier":   attack["tier"],
             "after":  f"Dynamic rule added for {attack['type']} — pattern now blocked",
-            "ts":     datetime.utcnow().isoformat() + "Z",
+            "ts":     datetime.now(timezone.utc).isoformat() + "Z",
         }
 
         log.info(f"🔧 Auto-patched: {attack['type']} bypass added to dynamic rules")

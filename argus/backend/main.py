@@ -22,7 +22,7 @@ import logging
 import secrets
 import time as _time
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -64,7 +64,12 @@ try:
     import sentry_sdk
     sentry_dsn = os.getenv("SENTRY_DSN", "")
     if sentry_dsn:
-        sentry_sdk.init(dsn=sentry_dsn, traces_sample_rate=0.1)
+        sentry_sdk.init(
+            dsn=sentry_dsn,
+            traces_sample_rate=0.1,
+            environment=os.getenv("ENV", "development"),
+            release=os.getenv("RAILWAY_GIT_COMMIT_SHA", "local"),
+        )
 except ImportError:
     pass
 
@@ -254,6 +259,20 @@ async def limit_request_body(request: Request, call_next):
     return await call_next(request)
 
 
+# ─── Request ID Tracing ──────────────────────────────────────────────────────
+# OBSERVABILITY: Every request gets a unique ID for log correlation and debugging.
+import uuid as _uuid
+
+
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    request_id = request.headers.get("x-request-id", str(_uuid.uuid4()))
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
 # ─── Security Headers ─────────────────────────────────────────────────────────
 # SECURITY: Harden all responses against XSS, clickjacking, and MIME-sniffing.
 @app.middleware("http")
@@ -408,7 +427,7 @@ async def ws_live_feed(ws: WebSocket):
                 # Client can send pong or other messages — ignore
             except asyncio.TimeoutError:
                 # No message from client in 30s — send ping
-                await ws.send_text(json.dumps({"type": "ping", "ts": datetime.utcnow().isoformat()}))
+                await ws.send_text(json.dumps({"type": "ping", "ts": datetime.now(timezone.utc).isoformat()}))
     except (WebSocketDisconnect, Exception):
         pass
     finally:
@@ -449,7 +468,7 @@ async def health(request: Request):
         "status": "operational",
         "service": "ARGUS-X",
         "version": "3.0.0",
-        "ts": datetime.utcnow().isoformat() + "Z",
+        "ts": datetime.now(timezone.utc).isoformat() + "Z",
     }
 
     # Authenticated response: full internal details

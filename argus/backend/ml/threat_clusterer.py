@@ -7,7 +7,7 @@ CRITICAL: SBERT encoding and DBSCAN fit are CPU-bound — offloaded via asyncio.
 import asyncio
 import logging
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 from collections import defaultdict
 
@@ -63,7 +63,7 @@ class ThreatClusterer:
             "text": text[:300],
             "threat_type": threat_type,
             "sophistication": sophistication,
-            "ts": datetime.utcnow().isoformat() + "Z",
+            "ts": datetime.now(timezone.utc).isoformat() + "Z",
         })
         self._attack_count += 1
 

@@ -3,7 +3,7 @@ ARGUS-X — Analytics Router
 Endpoints: /stats, /logs, /heatmap
 """
 from fastapi import APIRouter, Request, Query
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Rate limiting (graceful — no-op if slowapi not installed)
 try:
@@ -77,7 +77,7 @@ async def get_stats(request: Request):
         "dynamic_rules_count": app.state.firewall.get_dynamic_rules_count(),
         "firewall_mode": app.state.firewall.mode(),
         "ml_threshold": app.state.firewall.get_threshold(),
-        "ts": datetime.utcnow().isoformat() + "Z",
+        "ts": datetime.now(timezone.utc).isoformat() + "Z",
     }
 
 

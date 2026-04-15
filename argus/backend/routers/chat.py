@@ -9,7 +9,7 @@ import time
 import uuid
 import hashlib
 import html
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field, field_validator
@@ -117,7 +117,7 @@ def _build_event(user_id, session_id, message, action, threat_type,
 
     return {
         "id":                    str(uuid.uuid4())[:8],
-        "ts":                    datetime.utcnow().isoformat() + "Z",
+        "ts":                    datetime.now(timezone.utc).isoformat() + "Z",
         "user_id":               user_id,
         "session_id":            session_id,
         "org_id":                org_id,

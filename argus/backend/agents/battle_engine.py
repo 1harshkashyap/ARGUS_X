@@ -6,7 +6,7 @@ Broadcasts battle state to Supabase Realtime every tick (1.5s).
 import asyncio
 import random
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from agents.red_team_agent import RedTeamAgent
@@ -35,7 +35,7 @@ class BattleEngine:
         self.running = False
         self.paused = False
         self.tick = 0
-        self.tick_interval = 60  # seconds between battle ticks
+        self.tick_interval = 15  # seconds between battle ticks (fast enough for demos)
         
         # Battle scoreboard
         self.state = {
@@ -96,7 +96,7 @@ class BattleEngine:
                 if defense.get("auto_patched"):
                     self.state["blue_auto_patches"] += 1
         
-        self.state["last_update"] = datetime.utcnow().isoformat() + "Z"
+        self.state["last_update"] = datetime.now(timezone.utc).isoformat() + "Z"
 
         # Broadcast to Supabase (triggers Realtime)
         await self.db.update_battle_state(self.state)
