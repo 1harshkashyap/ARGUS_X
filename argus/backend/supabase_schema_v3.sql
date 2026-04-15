@@ -49,7 +49,9 @@ CREATE TABLE IF NOT EXISTS stats (
 INSERT INTO stats (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
 CREATE OR REPLACE FUNCTION increment_stat(col_name TEXT)
-RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
   EXECUTE format(
     'UPDATE stats SET %I = %I + 1, total = CASE WHEN %L = ANY(ARRAY[''blocked'',''sanitized'',''clean'']) THEN total + 1 ELSE total END, updated_at = NOW() WHERE id = 1',
@@ -151,7 +153,9 @@ CREATE TABLE IF NOT EXISTS attack_fingerprints (
 
 CREATE OR REPLACE FUNCTION upsert_fingerprint(
   p_fingerprint_id TEXT, p_threat_type TEXT, p_sophistication INTEGER, p_explanation TEXT
-) RETURNS void LANGUAGE plpgsql AS $$
+) RETURNS void LANGUAGE plpgsql
+SET search_path = public
+AS $$
 BEGIN
   INSERT INTO attack_fingerprints (fingerprint_id, threat_type, sophistication, explanation)
   VALUES (p_fingerprint_id, p_threat_type, p_sophistication, p_explanation)
@@ -233,22 +237,30 @@ ALTER TABLE knowledge_base      ENABLE ROW LEVEL SECURITY;
 
 -- ── ANON READ POLICIES (dashboard-safe tables only) ──────────────────────
 -- These tables contain aggregated/metadata only — no raw attack payloads.
+-- NOTE: DROP before CREATE is REQUIRED — PostgreSQL errors if policy already exists.
+DROP POLICY IF EXISTS "Anon read stats"        ON stats;
 CREATE POLICY "Anon read stats"          ON stats               FOR SELECT TO anon USING (true);
+DROP POLICY IF EXISTS "Anon read battle"       ON battle_state;
 CREATE POLICY "Anon read battle"         ON battle_state        FOR SELECT TO anon USING (true);
+DROP POLICY IF EXISTS "Anon read evolution"    ON evolution_log;
 CREATE POLICY "Anon read evolution"      ON evolution_log       FOR SELECT TO anon USING (true);
+DROP POLICY IF EXISTS "Anon read campaigns"    ON campaigns;
 CREATE POLICY "Anon read campaigns"      ON campaigns           FOR SELECT TO anon USING (true);
+DROP POLICY IF EXISTS "Anon read fingerprints" ON attack_fingerprints;
 CREATE POLICY "Anon read fingerprints"   ON attack_fingerprints FOR SELECT TO anon USING (true);
 
 -- SECURITY: Events table — anon reads through a secure view that strips
 -- raw preview text. Direct table access is service_role only.
+DROP POLICY IF EXISTS "Service only events"    ON events;
 CREATE POLICY "Service only events"      ON events              FOR SELECT TO authenticated USING (auth.role() = 'service_role');
 
 -- Create a safe view for anon reads (no raw payload previews)
-CREATE OR REPLACE VIEW events_safe AS
+DROP VIEW IF EXISTS events_safe;
+CREATE VIEW events_safe WITH (security_invoker = true) AS
 SELECT
-    id, ts, user_id, session_id, org_id,
+    id, created_at, user_id, session_id, org_id,
     action, threat_type, score, layer, latency_ms,
-    method, sophistication, mutations_preblocked,
+    method, sophistication_score, mutations_preblocked,
     session_threat_level,
     -- Redact preview: only show for CLEAN events, hash for threats
     CASE
@@ -261,44 +273,51 @@ FROM events;
 GRANT SELECT ON events_safe TO anon;
 
 -- XAI decisions: anon can read reasoning (no raw payloads after chat.py redaction)
+DROP POLICY IF EXISTS "Anon read xai"          ON xai_decisions;
 CREATE POLICY "Anon read xai"            ON xai_decisions       FOR SELECT TO anon USING (true);
 
 -- Threat clusters: anon can read (sample_text is now hashed after clusterer fix)
+DROP POLICY IF EXISTS "Anon read clusters"     ON threat_clusters;
 CREATE POLICY "Anon read clusters"       ON threat_clusters     FOR SELECT TO anon USING (true);
 
 -- ── SENSITIVE TABLES: SERVICE ROLE ONLY ──────────────────────────────────
 -- These tables contain raw attack payloads and firewall bypass patterns.
 -- NEVER expose to anon key under any circumstances.
+DROP POLICY IF EXISTS "Service only red_team"  ON red_team_sessions;
 CREATE POLICY "Service only red_team"    ON red_team_sessions   FOR SELECT TO authenticated USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service only rules"     ON dynamic_rules;
 CREATE POLICY "Service only rules"       ON dynamic_rules       FOR SELECT TO authenticated USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service only knowledge" ON knowledge_base;
 CREATE POLICY "Service only knowledge"   ON knowledge_base      FOR SELECT TO authenticated USING (auth.role() = 'service_role');
 
 -- ── SERVICE ROLE WRITE POLICIES ──────────────────────────────────────────
 -- All writes restricted to service_role. Anon CANNOT insert, update, or delete.
+DROP POLICY IF EXISTS "Service write events"       ON events;
 CREATE POLICY "Service write events"       ON events              FOR INSERT TO authenticated WITH CHECK (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service write stats"        ON stats;
 CREATE POLICY "Service write stats"        ON stats               FOR UPDATE TO authenticated USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service write xai"          ON xai_decisions;
 CREATE POLICY "Service write xai"          ON xai_decisions       FOR INSERT TO authenticated WITH CHECK (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service write battle"       ON battle_state;
 CREATE POLICY "Service write battle"       ON battle_state        FOR ALL    TO authenticated USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service write evolution"    ON evolution_log;
 CREATE POLICY "Service write evolution"    ON evolution_log       FOR INSERT TO authenticated WITH CHECK (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service write clusters"     ON threat_clusters;
 CREATE POLICY "Service write clusters"     ON threat_clusters     FOR ALL    TO authenticated USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service write red_team"     ON red_team_sessions;
 CREATE POLICY "Service write red_team"     ON red_team_sessions   FOR INSERT TO authenticated WITH CHECK (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service write fingerprints" ON attack_fingerprints;
 CREATE POLICY "Service write fingerprints" ON attack_fingerprints FOR ALL    TO authenticated USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service write campaigns"    ON campaigns;
 CREATE POLICY "Service write campaigns"    ON campaigns           FOR ALL    TO authenticated USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service write rules"        ON dynamic_rules;
 CREATE POLICY "Service write rules"        ON dynamic_rules       FOR ALL    TO authenticated USING (auth.role() = 'service_role');
+DROP POLICY IF EXISTS "Service write knowledge"    ON knowledge_base;
 CREATE POLICY "Service write knowledge"    ON knowledge_base      FOR ALL    TO authenticated USING (auth.role() = 'service_role');
 
--- ── SAFE VIEW: events without raw previews ───────────────────────────────
--- Dashboard should query this view instead of the events table directly
--- to avoid leaking redacted attack text hashes that could still be correlated.
-CREATE OR REPLACE VIEW events_safe WITH (security_barrier = true) AS
-SELECT
-  id, created_at, user_id, session_id, action, threat_type,
-  score, layer, latency_ms, method, sophistication_score,
-  attack_fingerprint, mutations_preblocked, session_threat_level
-FROM events;
-
 -- ── SAFE VIEW: bypass history (no raw attack_text) ───────────────────────
-CREATE OR REPLACE VIEW bypass_history_safe WITH (security_barrier = true) AS
+DROP VIEW IF EXISTS bypass_history_safe;
+CREATE VIEW bypass_history_safe WITH (security_invoker = true) AS
 SELECT
   id, created_at, attack_type, tier, bypassed, auto_patched,
   cycle, score, latency_ms
