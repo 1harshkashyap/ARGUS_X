@@ -5,8 +5,8 @@ and auto-patches them. This is the "self-hardening" system.
 
 No other LLM security product does autonomous self-adversarial training.
 """
-import asyncio, random, time, logging
-from datetime import datetime
+import asyncio, random, time, logging, hashlib
+from datetime import datetime, timezone
 from typing import List, Dict, Optional
 
 log = logging.getLogger("argus.red_agent")
@@ -93,7 +93,7 @@ class RedTeamAgent:
     async def _run_cycle(self):
         """One cycle: try 10 attacks, report results."""
         self.cycle_count += 1
-        self.last_run = datetime.utcnow().isoformat() + "Z"
+        self.last_run = datetime.now(timezone.utc).isoformat() + "Z"
         
         # Select attacks for this cycle
         batch = random.sample(SEED_ATTACKS, min(10, len(SEED_ATTACKS)))
@@ -107,7 +107,7 @@ class RedTeamAgent:
             # Feed into correlator for campaign detection
             if self.correlator:
                 self.correlator.ingest_event({
-                    "ts": datetime.utcnow().isoformat() + "Z",
+                    "ts": datetime.now(timezone.utc).isoformat() + "Z",
                     "action": "CLEAN" if result["bypassed"] else "BLOCKED",
                     "threat_type": attack["type"],
                     "fingerprint": None,
@@ -118,7 +118,13 @@ class RedTeamAgent:
             
             if result["bypassed"]:
                 self.bypasses_found += 1
-                self.last_bypass = result
+                # SECURITY: Redact raw attack text from in-memory status
+                self.last_bypass = {
+                    "type": attack["type"],
+                    "tier": attack["tier"],
+                    "score": result.get("score", 0),
+                    "ts": datetime.now(timezone.utc).isoformat() + "Z",
+                }
                 
                 # Auto-patch immediately
                 await self._auto_patch(attack, result)
@@ -131,7 +137,8 @@ class RedTeamAgent:
                     "bypassed": True,
                     "auto_patched": True,
                     "cycle": self.cycle_count,
-                    "ts": datetime.utcnow().isoformat() + "Z"
+                    "score": result.get("score", 0),
+                    "ts": datetime.now(timezone.utc).isoformat() + "Z"
                 })
                 
                 log.warning(f"⚠️ BYPASS FOUND + AUTO-PATCHED: {attack['type']} | Tier {attack['tier']}")
@@ -157,12 +164,14 @@ class RedTeamAgent:
         await self.db.add_dynamic_rule(text, attack["type"], source="RED_AGENT_PATCH")
 
         # Record patch event for dashboard visualization
+        # SECURITY: Hash attack text — never expose raw payloads via stats API
+        text_hash = hashlib.sha256(text[:200].encode()).hexdigest()[:16]
         self.last_patch = {
-            "before": text[:200],
+            "before": text_hash + " [REDACTED]",
             "type":   attack["type"],
             "tier":   attack["tier"],
             "after":  f"Dynamic rule added for {attack['type']} — pattern now blocked",
-            "ts":     datetime.utcnow().isoformat() + "Z",
+            "ts":     datetime.now(timezone.utc).isoformat() + "Z",
         }
 
         log.info(f"🔧 Auto-patched: {attack['type']} bypass added to dynamic rules")
@@ -174,6 +183,12 @@ class RedTeamAgent:
             result = await self._try_attack(attack)
             results.append(result)
         return results
+
+    def generate_batch(self, tier: int, count: int = 5) -> List[dict]:
+        """Generate a batch of tier-appropriate attacks for the battle engine.
+        Returns attacks up to the given tier for escalation-aware testing."""
+        eligible = [a for a in SEED_ATTACKS if a.get("tier", 1) <= tier]
+        return random.sample(eligible, min(count, len(eligible)))
 
     def pause(self):
         self.paused = True

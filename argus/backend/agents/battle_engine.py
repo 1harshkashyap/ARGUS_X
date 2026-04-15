@@ -6,10 +6,10 @@ Broadcasts battle state to Supabase Realtime every tick (1.5s).
 import asyncio
 import random
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
-from agents.red_team_agent import SEED_ATTACKS
+from agents.red_team_agent import RedTeamAgent
 
 log = logging.getLogger("argus.battle_engine")
 
@@ -35,7 +35,7 @@ class BattleEngine:
         self.running = False
         self.paused = False
         self.tick = 0
-        self.tick_interval = 60  # seconds between battle ticks
+        self.tick_interval = 15  # seconds between battle ticks (fast enough for demos)
         
         # Battle scoreboard
         self.state = {
@@ -74,9 +74,8 @@ class BattleEngine:
         self.state["red_tier"] = tier
         self.state["red_strategy"] = _TIER_STRATEGY.get(tier, "UNKNOWN")
 
-        # Red agent generates attacks filtered to current tier (escalation-aware)
-        eligible = [a for a in SEED_ATTACKS if a.get("tier", 1) <= tier]
-        batch = random.sample(eligible, min(5, len(eligible)))
+        # Red agent generates attacks for the current tier (escalation-aware)
+        batch = self.red_agent.generate_batch(tier, count=5)
 
         for attack in batch:
             # Red agent tries the attack through the live firewall
@@ -97,7 +96,7 @@ class BattleEngine:
                 if defense.get("auto_patched"):
                     self.state["blue_auto_patches"] += 1
         
-        self.state["last_update"] = datetime.utcnow().isoformat() + "Z"
+        self.state["last_update"] = datetime.now(timezone.utc).isoformat() + "Z"
 
         # Broadcast to Supabase (triggers Realtime)
         await self.db.update_battle_state(self.state)

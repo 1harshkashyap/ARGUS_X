@@ -477,3 +477,37 @@ class SupabaseClient:
                 )
         except Exception as e:
             log.warning(f"Cluster batch upsert failed: {e}")
+
+    async def get_latest_evolution(self) -> dict:
+        """Load the most recent evolution snapshot from DB for startup hydration."""
+        try:
+            if self.available:
+                result = await self._run_sync(
+                    lambda: self._read_client.table("evolution_log")
+                        .select("*")
+                        .order("created_at", desc=True)
+                        .limit(1)
+                        .execute()
+                )
+                if result.data:
+                    return result.data[0]
+        except Exception as e:
+            log.warning(f"Evolution load failed: {e}")
+        return {}
+
+    async def get_latest_clusters(self) -> list:
+        """Load the most recent cluster snapshots from DB for startup hydration."""
+        try:
+            if self.available:
+                result = await self._run_sync(
+                    lambda: self._read_client.table("threat_clusters")
+                        .select("*")
+                        .order("created_at", desc=True)
+                        .limit(50)
+                        .execute()
+                )
+                return result.data if result.data else []
+        except Exception as e:
+            log.warning(f"Clusters load failed: {e}")
+        return []
+

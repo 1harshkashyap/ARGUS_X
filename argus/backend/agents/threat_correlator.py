@@ -7,7 +7,7 @@ that's not coincidence, that's a campaign.
 This is cross-session intelligence. Zero existing LLM security tools do this.
 """
 import asyncio, logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from typing import Dict, List, Optional
 
@@ -90,7 +90,7 @@ class ThreatCorrelator:
             
             # Track threat type velocity (for wave detection)
             tt = event.get("threat_type", "UNKNOWN")
-            now_ts = datetime.utcnow().timestamp()
+            now_ts = datetime.now(timezone.utc).timestamp()
             self.threat_type_velocity[tt].append(now_ts)
 
             # Prune old timestamps (keep last 24h, cap at 1000 per type)
@@ -114,7 +114,7 @@ class ThreatCorrelator:
 
     async def _analyze_patterns(self):
         """Core correlation logic — runs every 30 seconds."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         for campaign_type, cfg in CAMPAIGN_THRESHOLDS.items():
             window_start = now - timedelta(minutes=cfg["window_minutes"])
@@ -179,8 +179,8 @@ class ThreatCorrelator:
     def get_threat_velocity(self) -> Dict[str, int]:
         """Returns count of each threat type in last 10 minutes.
         Also prunes stale entries to prevent memory growth."""
-        cutoff_10m = (datetime.utcnow() - timedelta(minutes=10)).timestamp()
-        cutoff_24h = (datetime.utcnow() - timedelta(hours=24)).timestamp()
+        cutoff_10m = (datetime.now(timezone.utc) - timedelta(minutes=10)).timestamp()
+        cutoff_24h = (datetime.now(timezone.utc) - timedelta(hours=24)).timestamp()
         velocity = {}
         stale_keys = []
         for tt, timestamps in self.threat_type_velocity.items():

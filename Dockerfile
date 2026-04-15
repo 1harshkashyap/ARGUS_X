@@ -23,7 +23,9 @@ FROM python:3.11-slim AS model-fetcher
 COPY --from=builder /install /usr/local
 
 ARG HF_MODEL_REPO=""
+ARG HF_TOKEN=""
 ENV HF_MODEL_REPO=${HF_MODEL_REPO}
+ENV HF_TOKEN=${HF_TOKEN}
 
 RUN mkdir -p /models && \
     if [ -n "$HF_MODEL_REPO" ]; then \
@@ -32,9 +34,10 @@ from huggingface_hub import hf_hub_download; \
 from transformers import AutoTokenizer; \
 import os; \
 repo = os.environ['HF_MODEL_REPO']; \
+token = os.environ.get('HF_TOKEN') or None; \
 print(f'Downloading model from {repo}...'); \
-hf_hub_download(repo_id=repo, filename='argus_classifier.onnx', local_dir='/models'); \
-tok = AutoTokenizer.from_pretrained(repo); \
+hf_hub_download(repo_id=repo, filename='argus_classifier.onnx', local_dir='/models', token=token); \
+tok = AutoTokenizer.from_pretrained(repo, token=token); \
 tok.save_pretrained('/models/tokenizer'); \
 print('Model + tokenizer baked into image.'); \
         "; \

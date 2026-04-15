@@ -5,7 +5,7 @@ Returns JSON that the frontend renders as a printable HTML page.
 """
 import html
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Request
 
 router = APIRouter()
@@ -86,7 +86,7 @@ async def export_compliance_report(request: Request, limit: int = 100):
 
     return {
         "report_type": "ARGUS-X Compliance Report",
-        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "generated_at": datetime.now(timezone.utc).isoformat() + "Z",
         "version": "3.0.0",
         "summary": {
             "total_events": total,

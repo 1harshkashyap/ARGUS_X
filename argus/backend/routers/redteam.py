@@ -10,7 +10,7 @@ import hashlib
 from fastapi import APIRouter, Request, Header, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import time, uuid
 
 # Rate limiting (graceful — no-op if slowapi not installed)
@@ -85,7 +85,7 @@ async def redteam_test(
     # Feed into correlator for campaign detection
     action = "BLOCKED" if fw_result["blocked"] else "CLEAN"
     app.state.correlator.ingest_event({
-        "ts": datetime.utcnow().isoformat() + "Z",
+        "ts": datetime.now(timezone.utc).isoformat() + "Z",
         "action": action,
         "threat_type": threat_type,
         "fingerprint": fp.get("fingerprint_id"),
@@ -246,6 +246,6 @@ async def apex_attack_demo(request: Request):
         "steps": len(timeline),
         "all_healed": all(t["retest_verdict"] == "BLOCKED" for t in timeline),
         "timeline": timeline,
-        "ts": datetime.utcnow().isoformat() + "Z",
+        "ts": datetime.now(timezone.utc).isoformat() + "Z",
     }
 

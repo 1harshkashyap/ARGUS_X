@@ -22,7 +22,7 @@ import logging
 import secrets
 import time as _time
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -64,7 +64,12 @@ try:
     import sentry_sdk
     sentry_dsn = os.getenv("SENTRY_DSN", "")
     if sentry_dsn:
-        sentry_sdk.init(dsn=sentry_dsn, traces_sample_rate=0.1)
+        sentry_sdk.init(
+            dsn=sentry_dsn,
+            traces_sample_rate=0.1,
+            environment=os.getenv("ENV", "development"),
+            release=os.getenv("RAILWAY_GIT_COMMIT_SHA", "local"),
+        )
 except ImportError:
     pass
 
@@ -147,6 +152,35 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         log.warning(f"Dynamic rules load failed (non-fatal): {e}")
 
+    # Load persisted evolution data from DB
+    try:
+        evo_snapshot = await container.db.get_latest_evolution()
+        if evo_snapshot:
+            container.evolution.last_avg = evo_snapshot.get("window_avg", 0.0)
+            container.evolution.escalation_count = evo_snapshot.get("escalation_count", 0)
+            log.info(f"📦 Loaded evolution state: avg={container.evolution.last_avg:.2f}, escalations={container.evolution.escalation_count}")
+    except Exception as e:
+        log.warning(f"Evolution load failed (non-fatal): {e}")
+
+    # Load persisted cluster data from DB
+    try:
+        db_clusters = await container.db.get_latest_clusters()
+        if db_clusters:
+            container.clusterer.clusters = [
+                {
+                    "cluster_id": c.get("cluster_id", ""),
+                    "size": c.get("cluster_size", 0),
+                    "dominant_type": c.get("dominant_type", ""),
+                    "avg_sophistication": c.get("avg_sophistication", 0),
+                    "sample_hash": c.get("sample_text", ""),
+                    "types": json.loads(c["types"]) if isinstance(c.get("types"), str) else c.get("types", []),
+                }
+                for c in db_clusters
+            ]
+            log.info(f"📦 Loaded {len(db_clusters)} threat clusters from DB")
+    except Exception as e:
+        log.warning(f"Cluster load failed (non-fatal): {e}")
+
     # Broadcast helper
     app.state.broadcast = _broadcast
 
@@ -223,6 +257,20 @@ async def limit_request_body(request: Request, call_next):
             content={"detail": f"Request body too large. Max {MAX_BODY_SIZE} bytes."},
         )
     return await call_next(request)
+
+
+# ─── Request ID Tracing ──────────────────────────────────────────────────────
+# OBSERVABILITY: Every request gets a unique ID for log correlation and debugging.
+import uuid as _uuid
+
+
+@app.middleware("http")
+async def add_request_id(request: Request, call_next):
+    request_id = request.headers.get("x-request-id", str(_uuid.uuid4()))
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
 
 
 # ─── Security Headers ─────────────────────────────────────────────────────────
@@ -379,7 +427,7 @@ async def ws_live_feed(ws: WebSocket):
                 # Client can send pong or other messages — ignore
             except asyncio.TimeoutError:
                 # No message from client in 30s — send ping
-                await ws.send_text(json.dumps({"type": "ping", "ts": datetime.utcnow().isoformat()}))
+                await ws.send_text(json.dumps({"type": "ping", "ts": datetime.now(timezone.utc).isoformat()}))
     except (WebSocketDisconnect, Exception):
         pass
     finally:
@@ -420,7 +468,7 @@ async def health(request: Request):
         "status": "operational",
         "service": "ARGUS-X",
         "version": "3.0.0",
-        "ts": datetime.utcnow().isoformat() + "Z",
+        "ts": datetime.now(timezone.utc).isoformat() + "Z",
     }
 
     # Authenticated response: full internal details

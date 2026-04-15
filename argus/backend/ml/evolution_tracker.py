@@ -6,7 +6,7 @@ Auto-tightens firewall thresholds when attacks are getting smarter.
 import asyncio
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import deque
 from typing import Dict, List, Optional
 
@@ -38,7 +38,7 @@ class EvolutionTracker:
             "score": sophistication_score,
             "threat_type": threat_type,
             "tier": tier,
-            "ts": datetime.utcnow().isoformat() + "Z",
+            "ts": datetime.now(timezone.utc).isoformat() + "Z",
         }
         self.scores.append(sophistication_score)
         self.history.append(entry)

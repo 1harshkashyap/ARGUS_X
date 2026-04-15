@@ -75,8 +75,9 @@ export default function CommandCenter() {
 
   const canvasAttacks = useMemo(
     () => attacks.slice(0, 30),
+    // Stable key: length changes on every new event (prepend)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [attacks.length > 0 ? attacks[0].id : 0],
+    [attacks.length],
   );
 
   const effectiveShowAlert = campaignWsAlert ? true : showAlert;
