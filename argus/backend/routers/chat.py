@@ -13,6 +13,8 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field, field_validator
+from typing import Literal
+
 
 # Rate limiting (graceful — no-op if slowapi not installed)
 try:
@@ -49,12 +51,24 @@ if _demo_raw and _ENV == "production":
 _SAFE_ID_PATTERN = re.compile(r'^[a-zA-Z0-9_\-\.@]{1,64}$')
 
 
+class ContextItem(BaseModel):
+    """Schema for a single conversation context item.
+    Enforces role whitelist and max content length to prevent
+    unbounded context payloads that bypass message size limits."""
+    role: Literal["user", "assistant"] = Field(
+        ..., description="Must be 'user' or 'assistant'"
+    )
+    content: str = Field(
+        ..., max_length=2000, description="Context message content (max 2000 chars)"
+    )
+
+
 class ChatRequest(BaseModel):
     message: str = Field(..., max_length=10000, description="User message (max 10000 chars)")
     user_id: str = Field(default="anonymous", max_length=64)
     session_id: str = Field(default="", max_length=64)
     # SECURITY: org_id is derived server-side, never from client input.
-    context: list = Field(default=[], max_length=10, description="Conversation context (max 10 items)")
+    context: list[ContextItem] = Field(default=[], max_length=10, description="Conversation context (max 10 items, each max 2000 chars)")
 
     @field_validator('user_id')
     @classmethod
@@ -166,7 +180,9 @@ async def chat(req: ChatRequest, request: Request):
     session_level = await _assess_session_threat(app, sid, req.user_id)
 
     # ── LAYER 1: INPUT FIREWALL (Regex + ONNX ML) ───────────────────────
-    fw = await app.state.firewall.analyze(req.message, session_context=req.context)
+    # Serialize ContextItem objects to dicts for downstream consumers
+    ctx_dicts = [c.model_dump() for c in req.context] if req.context else []
+    fw = await app.state.firewall.analyze(req.message, session_context=ctx_dicts)
 
     if fw["blocked"]:
         # ── LAYER 3: ATTACK FINGERPRINTING ───────────────────────────────
@@ -234,7 +250,7 @@ async def chat(req: ChatRequest, request: Request):
         )
 
     # ── LAYER 2: LLM CORE ───────────────────────────────────────────────
-    llm_response = await app.state.llm.generate(req.message, context=req.context)
+    llm_response = await app.state.llm.generate(req.message, context=ctx_dicts)
 
     # ── LAYER 3: OUTPUT AUDITOR ──────────────────────────────────────────
     audit = await app.state.auditor.analyze(llm_response, req.message)

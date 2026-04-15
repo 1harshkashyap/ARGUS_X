@@ -36,24 +36,22 @@ from pathlib import Path
 # Rate limiting
 # SECURITY: Use API key for rate limiting when available; fallback to IP.
 # This prevents per-IP bypass via proxies/VPNs.
-try:
-    from slowapi import Limiter, _rate_limit_exceeded_handler
-    from slowapi.util import get_remote_address
-    from slowapi.errors import RateLimitExceeded
+# CRITICAL: slowapi is a required dependency — never silently disable rate limiting.
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
-    def _rate_limit_key(request: Request) -> str:
-        """Rate limit by API key first, fallback to IP."""
-        api_key = request.headers.get("x-api-key", "")
-        if api_key:
-            # Hash the key so it's not stored in plaintext in rate limit backend
-            return "key:" + hashlib.sha256(api_key.encode()).hexdigest()[:16]
-        return "ip:" + get_remote_address(request)
 
-    limiter = Limiter(key_func=_rate_limit_key)
-    RATE_LIMIT_AVAILABLE = True
-except ImportError:
-    limiter = None
-    RATE_LIMIT_AVAILABLE = False
+def _rate_limit_key(request: Request) -> str:
+    """Rate limit by API key first, fallback to IP."""
+    api_key = request.headers.get("x-api-key", "")
+    if api_key:
+        # Hash the key so it's not stored in plaintext in rate limit backend
+        return "key:" + hashlib.sha256(api_key.encode()).hexdigest()[:16]
+    return "ip:" + get_remote_address(request)
+
+
+limiter = Limiter(key_func=_rate_limit_key)
 
 # Internal imports
 from utils.logger import setup_logger
@@ -253,12 +251,9 @@ async def add_security_headers(request: Request, call_next):
 
 
 # ─── Rate Limiting ────────────────────────────────────────────────────────────
-if RATE_LIMIT_AVAILABLE:
-    app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-    log.info("✅ Rate limiting active (slowapi)")
-else:
-    log.warning("⚠️  slowapi not installed — rate limiting is DISABLED")
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+log.info("✅ Rate limiting active (slowapi)")
 
 # ─── Include Routers ──────────────────────────────────────────────────────────
 # All /api/v1 routes require X-API-Key header (when API_KEY env var is set).

@@ -92,6 +92,7 @@ class LLMCore:
                 messages=messages,
                 max_tokens=500,
                 temperature=0.7,
+                timeout=15,  # seconds — fail gracefully, fall back to mock
             )
             
             return response.choices[0].message.content

@@ -23,8 +23,9 @@ numpy>=1.26.0
 sentence-transformers>=2.2.2
 scikit-learn>=1.3.0
 
-# Monitoring
+# Monitoring + Security
 sentry-sdk[fastapi]>=1.39.0
+slowapi>=0.1.9
 
 # Utilities
 httpx>=0.25.0

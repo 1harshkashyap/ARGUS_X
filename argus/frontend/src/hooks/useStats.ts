@@ -40,7 +40,7 @@ export function useStatsPoller(): void {
   useQuery({
     queryKey: ['argus-stats'],
     queryFn: ({ signal }) => fetchStats(signal),
-    refetchInterval: 3000,
+    refetchInterval: 15_000, // 15s — real-time events come via WS; stats are aggregate
     // TanStack Query handles retry + backoff via queryClient defaults
 
     select: (data) => {

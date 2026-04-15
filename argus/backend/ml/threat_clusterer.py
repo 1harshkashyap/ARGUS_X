@@ -37,8 +37,9 @@ class ThreatClusterer:
     Falls back to keyword-based clustering if ML libraries unavailable.
     """
 
-    def __init__(self, models=None):
+    def __init__(self, models=None, db=None):
         self.models = models
+        self._db = db  # Optional: persist clusters to threat_clusters table
         self.encoder = None
         self.attacks: List[dict] = []
         self.embeddings: List = []
@@ -79,6 +80,12 @@ class ThreatClusterer:
         # CRITICAL: DBSCAN fit() is CPU-heavy — offload to thread
         if self._attack_count % self.recluster_interval == 0:
             await asyncio.to_thread(self._recluster)
+            # Persist clusters to DB (fire-and-forget)
+            if self._db and self.clusters:
+                try:
+                    asyncio.create_task(self._db.batch_upsert_clusters(self.clusters))
+                except Exception as e:
+                    log.warning(f"Cluster persist failed: {e}")
 
         # Keep bounded
         if len(self.attacks) > 2000:

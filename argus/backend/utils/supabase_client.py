@@ -434,3 +434,46 @@ class SupabaseClient:
         except Exception as e:
             log.warning(f"Battle history fetch failed: {e}")
         return []
+
+    # ── Evolution Persistence ─────────────────────────────────────────────────
+
+    async def log_evolution_snapshot(self, window_avg: float, trend: str,
+                                     data_points: int, escalation_count: int):
+        """Persist an evolution window snapshot to evolution_log table.
+        Called every window_size events to preserve trend history across restarts."""
+        try:
+            if self.available:
+                row = {
+                    "window_avg": round(window_avg, 4),
+                    "trend": trend,
+                    "data_points": data_points,
+                    "escalation_count": escalation_count,
+                }
+                await self._run_sync(
+                    lambda: self._write_client.table("evolution_log").insert(row).execute()
+                )
+        except Exception as e:
+            log.warning(f"Evolution snapshot log failed: {e}")
+
+    # ── Cluster Persistence ───────────────────────────────────────────────────
+
+    async def batch_upsert_clusters(self, clusters: list):
+        """Persist current cluster state to threat_clusters table.
+        Called after each recluster to preserve cluster intelligence across restarts."""
+        try:
+            if self.available and clusters:
+                rows = []
+                for c in clusters[:50]:  # Cap batch size
+                    rows.append({
+                        "cluster_id": c.get("cluster_id", ""),
+                        "cluster_size": c.get("size", 0),
+                        "dominant_type": c.get("dominant_type", ""),
+                        "avg_sophistication": c.get("avg_sophistication", 0),
+                        "sample_text": c.get("sample_hash", ""),  # Hash only, never raw
+                        "types": json.dumps(c.get("types", [])),
+                    })
+                await self._run_sync(
+                    lambda: self._write_client.table("threat_clusters").insert(rows).execute()
+                )
+        except Exception as e:
+            log.warning(f"Cluster batch upsert failed: {e}")

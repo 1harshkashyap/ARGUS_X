@@ -168,10 +168,22 @@ class InputFirewall:
                     best_match = rule
 
         # Check dynamic rules (added by mutation engine / red team)
+        # NOTE: Dynamic rules default to substring matching (use_regex=False)
+        # for patterns learned from mutation engine payloads. Set use_regex=True
+        # on a rule to use re.search() like static rules.
         if not skip_dynamic:
             for rule in self.dynamic_rules:
                 pattern = rule.get("pattern", "")
-                if pattern and pattern.lower() in text.lower():
+                if not pattern:
+                    continue
+                if rule.get("use_regex", False):
+                    try:
+                        matched = re.search(pattern, text, re.I | re.S)
+                    except re.error:
+                        matched = False
+                else:
+                    matched = pattern.lower() in text.lower()
+                if matched:
                     score = rule.get("severity", 0.85)
                     if score > best_score:
                         best_score = score
@@ -255,9 +267,14 @@ class InputFirewall:
             log.warning(f"ML scan error: {e}")
             return {"blocked": False, "score": 0, "threat_type": None, "method": "ML_ERROR"}
 
-    def add_dynamic_rule(self, pattern: str, threat_type: str, severity: float = 0.85):
+    def add_dynamic_rule(self, pattern: str, threat_type: str, severity: float = 0.85, use_regex: bool = False):
         """Add a dynamic rule (from mutation engine or red team agent).
-        Deduplicates by pattern and caps total rules at MAX_DYNAMIC_RULES."""
+        Deduplicates by pattern and caps total rules at MAX_DYNAMIC_RULES.
+
+        Args:
+            use_regex: If True, pattern is matched via re.search() (like static rules).
+                       If False (default), pattern is matched via substring containment.
+        """
         # Deduplicate: skip if pattern already exists
         pattern_key = pattern.lower().strip()
         if pattern_key in self._dynamic_patterns:
@@ -269,6 +286,7 @@ class InputFirewall:
             "type": threat_type,
             "severity": severity,
             "source": "DYNAMIC",
+            "use_regex": use_regex,
         })
 
         # Evict oldest rules if over capacity

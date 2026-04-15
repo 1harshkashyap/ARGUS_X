@@ -3,6 +3,7 @@ ARGUS-X — Evolution Tracker (Layer 6)
 Tracks sophistication trends over time. Detects escalation patterns.
 Auto-tightens firewall thresholds when attacks are getting smarter.
 """
+import asyncio
 import logging
 import time
 from datetime import datetime
@@ -17,13 +18,14 @@ class EvolutionTracker:
     Detects when attackers are escalating and auto-adjusts defenses.
     """
 
-    def __init__(self, window_size: int = 50):
+    def __init__(self, window_size: int = 50, db=None):
         self.window_size = window_size
         self.scores: deque = deque(maxlen=window_size)
         self.history: List[dict] = []  # Full log for analytics
         self.trend_windows: List[float] = []  # Average per window
         self.escalation_count = 0
         self.last_avg = 0.0
+        self._db = db  # Optional: persist snapshots to evolution_log table
         # Cached result for should_tighten_firewall (avoid recomputation per request)
         self._tighten_cache: bool = False
         self._tighten_cache_ts: float = 0.0
@@ -56,6 +58,21 @@ class EvolutionTracker:
                 log.warning(f"📈 Sophistication escalation detected: {self.last_avg:.1f} → {current_avg:.1f}")
             
             self.last_avg = current_avg
+
+            # Persist snapshot to DB (fire-and-forget — don't block the hot path)
+            if self._db:
+                try:
+                    report = self.get_evolution_report()
+                    asyncio.create_task(
+                        self._db.log_evolution_snapshot(
+                            window_avg=current_avg,
+                            trend=report.get("trend", "STABLE"),
+                            data_points=len(self.history),
+                            escalation_count=self.escalation_count,
+                        )
+                    )
+                except Exception as e:
+                    log.warning(f"Evolution persist failed: {e}")
 
     def get_evolution_report(self) -> Dict:
         """Get current evolution analysis."""

@@ -46,6 +46,11 @@ export function MiniClusterMap({ attacks }: MiniClusterMapProps) {
 
     const MAX_NODES = 80;
 
+    // Clear all nodes when no attacks — prevent stale state from prior renders
+    if (attacks.length === 0) {
+      nodesRef.current = {};
+    }
+
     const centers: Record<string, { x: number; y: number }> = {
       INSTRUCTION_OVERRIDE: { x: W * 0.2, y: H * 0.3 },
       ROLE_OVERRIDE: { x: W * 0.5, y: H * 0.15 },
