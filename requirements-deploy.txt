@@ -9,9 +9,8 @@ uvicorn[standard]==0.34.3
 pydantic==2.11.3
 python-dotenv==1.1.0
 
-# Supabase (postgrest pinned explicitly for consistency with dev)
+# Supabase (postgrest resolved automatically by supabase dependency)
 supabase==2.15.2
-postgrest==0.19.4
 
 # LLM
 litellm==1.73.6
