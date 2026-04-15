@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-from agents.red_team_agent import SEED_ATTACKS
+from agents.red_team_agent import RedTeamAgent
 
 log = logging.getLogger("argus.battle_engine")
 
@@ -74,9 +74,8 @@ class BattleEngine:
         self.state["red_tier"] = tier
         self.state["red_strategy"] = _TIER_STRATEGY.get(tier, "UNKNOWN")
 
-        # Red agent generates attacks filtered to current tier (escalation-aware)
-        eligible = [a for a in SEED_ATTACKS if a.get("tier", 1) <= tier]
-        batch = random.sample(eligible, min(5, len(eligible)))
+        # Red agent generates attacks for the current tier (escalation-aware)
+        batch = self.red_agent.generate_batch(tier, count=5)
 
         for attack in batch:
             # Red agent tries the attack through the live firewall

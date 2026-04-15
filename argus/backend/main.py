@@ -147,6 +147,35 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         log.warning(f"Dynamic rules load failed (non-fatal): {e}")
 
+    # Load persisted evolution data from DB
+    try:
+        evo_snapshot = await container.db.get_latest_evolution()
+        if evo_snapshot:
+            container.evolution.last_avg = evo_snapshot.get("window_avg", 0.0)
+            container.evolution.escalation_count = evo_snapshot.get("escalation_count", 0)
+            log.info(f"📦 Loaded evolution state: avg={container.evolution.last_avg:.2f}, escalations={container.evolution.escalation_count}")
+    except Exception as e:
+        log.warning(f"Evolution load failed (non-fatal): {e}")
+
+    # Load persisted cluster data from DB
+    try:
+        db_clusters = await container.db.get_latest_clusters()
+        if db_clusters:
+            container.clusterer.clusters = [
+                {
+                    "cluster_id": c.get("cluster_id", ""),
+                    "size": c.get("cluster_size", 0),
+                    "dominant_type": c.get("dominant_type", ""),
+                    "avg_sophistication": c.get("avg_sophistication", 0),
+                    "sample_hash": c.get("sample_text", ""),
+                    "types": json.loads(c["types"]) if isinstance(c.get("types"), str) else c.get("types", []),
+                }
+                for c in db_clusters
+            ]
+            log.info(f"📦 Loaded {len(db_clusters)} threat clusters from DB")
+    except Exception as e:
+        log.warning(f"Cluster load failed (non-fatal): {e}")
+
     # Broadcast helper
     app.state.broadcast = _broadcast
 

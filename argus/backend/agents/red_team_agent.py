@@ -5,7 +5,7 @@ and auto-patches them. This is the "self-hardening" system.
 
 No other LLM security product does autonomous self-adversarial training.
 """
-import asyncio, random, time, logging
+import asyncio, random, time, logging, hashlib
 from datetime import datetime
 from typing import List, Dict, Optional
 
@@ -118,7 +118,13 @@ class RedTeamAgent:
             
             if result["bypassed"]:
                 self.bypasses_found += 1
-                self.last_bypass = result
+                # SECURITY: Redact raw attack text from in-memory status
+                self.last_bypass = {
+                    "type": attack["type"],
+                    "tier": attack["tier"],
+                    "score": result.get("score", 0),
+                    "ts": datetime.utcnow().isoformat() + "Z",
+                }
                 
                 # Auto-patch immediately
                 await self._auto_patch(attack, result)
@@ -131,6 +137,7 @@ class RedTeamAgent:
                     "bypassed": True,
                     "auto_patched": True,
                     "cycle": self.cycle_count,
+                    "score": result.get("score", 0),
                     "ts": datetime.utcnow().isoformat() + "Z"
                 })
                 
@@ -157,8 +164,10 @@ class RedTeamAgent:
         await self.db.add_dynamic_rule(text, attack["type"], source="RED_AGENT_PATCH")
 
         # Record patch event for dashboard visualization
+        # SECURITY: Hash attack text — never expose raw payloads via stats API
+        text_hash = hashlib.sha256(text[:200].encode()).hexdigest()[:16]
         self.last_patch = {
-            "before": text[:200],
+            "before": text_hash + " [REDACTED]",
             "type":   attack["type"],
             "tier":   attack["tier"],
             "after":  f"Dynamic rule added for {attack['type']} — pattern now blocked",
@@ -174,6 +183,12 @@ class RedTeamAgent:
             result = await self._try_attack(attack)
             results.append(result)
         return results
+
+    def generate_batch(self, tier: int, count: int = 5) -> List[dict]:
+        """Generate a batch of tier-appropriate attacks for the battle engine.
+        Returns attacks up to the given tier for escalation-aware testing."""
+        eligible = [a for a in SEED_ATTACKS if a.get("tier", 1) <= tier]
+        return random.sample(eligible, min(count, len(eligible)))
 
     def pause(self):
         self.paused = True
