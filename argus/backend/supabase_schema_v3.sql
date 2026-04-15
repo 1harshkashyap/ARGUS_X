@@ -185,7 +185,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
 CREATE TABLE IF NOT EXISTS dynamic_rules (
   id            UUID         DEFAULT gen_random_uuid() PRIMARY KEY,
   created_at    TIMESTAMPTZ  DEFAULT NOW(),
-  pattern       TEXT         NOT NULL,
+  pattern       TEXT         NOT NULL UNIQUE,
   threat_type   TEXT,
   source        TEXT         CHECK (source IN ('MUTATION_ENGINE','RED_TEAM_AGENT','MANUAL')),
   active        BOOLEAN      DEFAULT true,

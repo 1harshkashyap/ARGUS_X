@@ -96,7 +96,7 @@ class BattleEngine:
                 if defense.get("auto_patched"):
                     self.state["blue_auto_patches"] += 1
         
-        self.state["last_update"] = datetime.now(timezone.utc).isoformat() + "Z"
+        self.state["last_update"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f+00:00")
 
         # Broadcast to Supabase (triggers Realtime)
         await self.db.update_battle_state(self.state)
