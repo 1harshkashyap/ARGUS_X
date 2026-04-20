@@ -406,15 +406,28 @@ async def ws_live_feed(ws: WebSocket):
             is_valid = await _validate_ws_token(token) if token else False
             if msg.get("type") != "auth" or (not is_valid and token != _expected):
                 log.warning("🔒 WebSocket rejected — invalid auth")
-                await ws.close(code=4003)
+                try:
+                    await ws.close(code=4003)
+                except Exception:
+                    pass  # Already closed — ignore
                 return
         except asyncio.TimeoutError:
             log.warning("🔒 WebSocket rejected — auth timeout")
-            await ws.close(code=4003)
+            try:
+                await ws.close(code=4003)
+            except Exception:
+                pass  # Already closed — ignore
+            return
+        except WebSocketDisconnect:
+            # Client navigated away before auth completed — not an error
+            log.info("WebSocket disconnected before auth completed")
             return
         except Exception:
             log.warning("🔒 WebSocket rejected — malformed auth")
-            await ws.close(code=4003)
+            try:
+                await ws.close(code=4003)
+            except Exception:
+                pass  # Already closed — ignore
             return
 
     # ── Enforce connection cap ────────────────────────────────────────
