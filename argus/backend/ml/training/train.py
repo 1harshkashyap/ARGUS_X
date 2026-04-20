@@ -1,5 +1,5 @@
 """
-ARGUS-X — DistilBERT Prompt Injection Classifier Training
+ARGUS-X — DeBERTa-v3 Prompt Injection Classifier Training
 ═══════════════════════════════════════════════════════════
 Run this in Google Colab with T4 GPU. Takes ~15 minutes.
 After training, automatically:

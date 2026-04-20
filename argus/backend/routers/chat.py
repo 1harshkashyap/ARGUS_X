@@ -7,6 +7,7 @@ import os
 import re
 import time
 import uuid
+import asyncio
 import hashlib
 import html
 import logging
@@ -37,15 +38,21 @@ def _rate_limit(limit_string: str):
 router = APIRouter()
 
 # Server-side only: demo bypass. NEVER expose this via the public API.
-# Operator must explicitly set DEMO_BYPASS_ENABLED=true in environment.
-# SECURITY: Force-disabled when ENV=production regardless of flag.
+# SECURITY: Triple-gated — requires ENV != production + flag + dedicated token.
 _ENV = os.getenv("ENV", "development").lower()
 _demo_raw = os.getenv("DEMO_BYPASS_ENABLED", "false").lower() == "true"
 DEMO_BYPASS_ENABLED = _demo_raw and _ENV != "production"
+DEMO_BYPASS_TOKEN = os.getenv("DEMO_BYPASS_TOKEN", "")
 if _demo_raw and _ENV == "production":
     import logging
     logging.getLogger("argus.security").critical(
         "🚨 DEMO_BYPASS_ENABLED=true IGNORED — blocked in production mode"
+    )
+if DEMO_BYPASS_ENABLED and not DEMO_BYPASS_TOKEN:
+    import logging
+    logging.getLogger("argus.security").warning(
+        "⚠️ DEMO_BYPASS_ENABLED=true but DEMO_BYPASS_TOKEN not set — "
+        "bypass will be disabled until token is configured"
     )
 
 
@@ -153,13 +160,21 @@ async def chat(req: ChatRequest, request: Request):
     app = request.app
     sid = req.session_id or str(uuid.uuid4())[:8]
 
-    # ── DEMO BYPASS MODE (server-side only, operator-controlled) ─────────
-    # This mode is ONLY active when the operator sets DEMO_BYPASS_ENABLED=true
-    # in the server environment. It is NEVER controllable by client input.
-    if DEMO_BYPASS_ENABLED:
+    # ── DEMO BYPASS MODE (triple-gated: flag + non-prod ENV + token) ─────
+    # Requires ALL of:
+    #   1. DEMO_BYPASS_ENABLED=true in env
+    #   2. ENV != production
+    #   3. DEMO_BYPASS_TOKEN set (non-empty) in env
+    #   4. Client sends matching X-Demo-Token header
+    _demo_active = False
+    if DEMO_BYPASS_ENABLED and DEMO_BYPASS_TOKEN:
+        _provided_demo_token = request.headers.get("x-demo-token", "")
+        if _provided_demo_token == DEMO_BYPASS_TOKEN:
+            _demo_active = True
+    if _demo_active:
         import logging
         logging.getLogger("argus.security").warning(
-            "DEMO_BYPASS active — security pipeline skipped for message from "
+            "DEMO_BYPASS activated via token — security pipeline skipped for "
             f"user={req.user_id} session={sid}"
         )
         raw = await app.state.llm.generate(req.message)
@@ -197,14 +212,18 @@ async def chat(req: ChatRequest, request: Request):
         sophistication = fp.get("sophistication_score", 1)
         fingerprint = fp.get("fingerprint_id")
 
-        # ── LAYER 4: SEMANTIC MUTATION ENGINE ────────────────────────────
+        # ── LAYER 4: SEMANTIC MUTATION ENGINE (non-blocking via queue) ────
+        # Mutations don't affect the response — they enrich future detection.
+        # Routed through bounded task queue for backpressure under load.
+        mutations = 0
         try:
-            mutations = await app.state.mutator.preblock_variants(
-                req.message, fw["threat_type"], app.state.firewall
+            _msg, _tt, _fw_ref = req.message, fw["threat_type"], app.state.firewall
+            app.state.task_queue.enqueue(
+                lambda: app.state.mutator.preblock_variants(_msg, _tt, _fw_ref),
+                f"mutation:{_tt}"
             )
         except Exception as e:
-            log.error(f"MutationEngine failed: {e}")
-            mutations = 0
+            log.error(f"MutationEngine enqueue failed: {e}")
 
         # ── LAYER 7: XAI ENGINE ─────────────────────────────────────────
         try:

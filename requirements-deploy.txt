@@ -33,4 +33,5 @@ huggingface-hub==0.32.4
 
 # Monitoring + Security
 sentry-sdk[fastapi]==2.23.1
-slowapi==0.1.9
+slowapi>=0.1.9
+python-jose>=3.3.0

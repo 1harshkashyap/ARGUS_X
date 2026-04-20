@@ -18,7 +18,7 @@ class EvolutionTracker:
     Detects when attackers are escalating and auto-adjusts defenses.
     """
 
-    def __init__(self, window_size: int = 50, db=None):
+    def __init__(self, window_size: int = 50, db=None, task_queue=None):
         self.window_size = window_size
         self.scores: deque = deque(maxlen=window_size)
         self.history: List[dict] = []  # Full log for analytics
@@ -26,6 +26,7 @@ class EvolutionTracker:
         self.escalation_count = 0
         self.last_avg = 0.0
         self._db = db  # Optional: persist snapshots to evolution_log table
+        self._task_queue = task_queue  # Bounded background task queue
         # Cached result for should_tighten_firewall (avoid recomputation per request)
         self._tighten_cache: bool = False
         self._tighten_cache_ts: float = 0.0
@@ -59,18 +60,35 @@ class EvolutionTracker:
             
             self.last_avg = current_avg
 
-            # Persist snapshot to DB (fire-and-forget — don't block the hot path)
+            # Persist snapshot to DB via bounded queue (non-blocking, no silent failures)
             if self._db:
                 try:
                     report = self.get_evolution_report()
-                    asyncio.create_task(
-                        self._db.log_evolution_snapshot(
-                            window_avg=current_avg,
-                            trend=report.get("trend", "STABLE"),
-                            data_points=len(self.history),
-                            escalation_count=self.escalation_count,
+                    _db = self._db
+                    _avg = current_avg
+                    _trend = report.get("trend", "STABLE")
+                    _points = len(self.history)
+                    _esc = self.escalation_count
+
+                    if self._task_queue:
+                        self._task_queue.enqueue(
+                            lambda: _db.log_evolution_snapshot(
+                                window_avg=_avg, trend=_trend,
+                                data_points=_points, escalation_count=_esc,
+                            ),
+                            "EvolutionSnapshot"
                         )
-                    )
+                    else:
+                        # Fallback: fire-and-forget with logging
+                        async def _persist():
+                            try:
+                                await _db.log_evolution_snapshot(
+                                    window_avg=_avg, trend=_trend,
+                                    data_points=_points, escalation_count=_esc,
+                                )
+                            except Exception as e:
+                                log.warning(f"EvolutionSnapshot persist failed: {e}")
+                        asyncio.create_task(_persist())
                 except Exception as e:
                     log.warning(f"Evolution persist failed: {e}")
 

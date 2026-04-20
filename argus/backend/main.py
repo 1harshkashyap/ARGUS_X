@@ -133,6 +133,10 @@ async def lifespan(app: FastAPI):
     app.state.clusterer = container.clusterer
     app.state.xai = container.xai
     app.state.session_store = container.session_store
+    app.state.task_queue = container.task_queue
+
+    # Start bounded background task queue
+    await container.task_queue.start()
 
     # WebSocket clients — set + lock for safe concurrent access
     app.state.ws_clients: set[WebSocket] = set()
@@ -504,6 +508,7 @@ async def health(request: Request):
             "correlator": app.state.correlator.status(),
         }
         response["ws_connections"] = len(app.state.ws_clients)
+        response["task_queue"] = app.state.task_queue.status()
 
     return response
 

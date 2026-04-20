@@ -24,3 +24,14 @@ ARGUS_X/
 
 # ── Frontend Build Artifacts ─────────────────────────────────────────────────
 argus/frontend/dist/
+
+# ── Graphify (knowledge graph) ───────────────────────────────────────────────
+graphify-out/
+graph.html
+GRAPH_REPORT.md
+graph.json
+.graphify_cache/
+.agent/
+
+# ── Security: Prevent leaked credentials from re-commit ─────────────────
+scratch_attack.py

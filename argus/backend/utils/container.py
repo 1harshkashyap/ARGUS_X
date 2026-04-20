@@ -50,6 +50,11 @@ class ServiceContainer:
     # ── Typed Accessors (IDE autocomplete + type safety) ─────────
 
     @property
+    def task_queue(self):
+        """Bounded background task queue."""
+        return self._services["task_queue"]
+
+    @property
     def db(self):
         """L1: Supabase database client."""
         return self._services["db"]
@@ -134,6 +139,7 @@ class ServiceContainer:
         from utils.supabase_client import SupabaseClient
         from utils.model_loader import ModelLoader
         from utils.session_store import SessionStore
+        from utils.task_queue import BackgroundTaskQueue
         from ml.firewall import InputFirewall
         from ml.auditor import OutputAuditor
         from ml.llm_core import LLMCore
@@ -146,6 +152,10 @@ class ServiceContainer:
         from agents.blue_agent import BlueAgent
         from agents.battle_engine import BattleEngine
         from agents.threat_correlator import ThreatCorrelator
+
+        # L0: Background Task Queue (bounded, with worker pool)
+        task_queue = BackgroundTaskQueue(maxsize=50, workers=3, name="argus-bg")
+        self.register("task_queue", task_queue)
 
         # L1: Database
         db = SupabaseClient()
@@ -173,8 +183,8 @@ class ServiceContainer:
         self.register("battle", BattleEngine(red, blue, db))
 
         # L6: Learning Layer
-        self.register("evolution", EvolutionTracker(db=db))
-        self.register("clusterer", ThreatClusterer(models, db=db))
+        self.register("evolution", EvolutionTracker(db=db, task_queue=task_queue))
+        self.register("clusterer", ThreatClusterer(models, db=db, task_queue=task_queue))
 
         # L7: XAI Engine
         self.register("xai", XAIEngine())
@@ -190,6 +200,8 @@ class ServiceContainer:
 
     async def shutdown(self) -> None:
         """Graceful shutdown — close resources that need cleanup."""
+        if "task_queue" in self._services:
+            await self.task_queue.shutdown()
         if "session_store" in self._services:
             await self.session_store.close()
         log.info("🔴 Container shutdown complete")

@@ -1,0 +1,40 @@
+# Graphify ignore file — only process real ARGUS-X source code
+
+# Python / Node packaging noise
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+dist/
+build/
+*.egg-info/
+.venv/
+venv/
+
+# Graphify's own output
+graphify-out/
+.graphify_cache/
+.agent/
+
+# Frontend build output
+argus/frontend/dist/
+
+# Binary / generated files
+*.onnx
+*.pb
+*.pt
+*.h5
+*.safetensors
+*.generated.py
+*.lock
+package-lock.json
+yarn.lock
+
+# Docs and test scaffolding (keep; comment out to include)
+# *.md
+# *_test.py
+# test_*.py
+
+# Git internals
+.git/

@@ -78,11 +78,13 @@ class BattleEngine:
         batch = self.red_agent.generate_batch(tier, count=5)
 
         for attack in batch:
-            # Red agent tries the attack through the live firewall
+            # Red agent probes the firewall (single scan)
             red_result = await self.red_agent._try_attack(attack)
 
-            # Blue agent defends
-            defense = await self.blue_agent.defend(attack["text"], attack["type"])
+            # Blue uses red's result — avoids double-scanning the same input
+            defense = await self.blue_agent.defend_from_result(
+                attack["text"], attack["type"], red_result
+            )
             
             self.state["red_attacks"] += 1
             

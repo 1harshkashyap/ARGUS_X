@@ -72,6 +72,53 @@ class BlueAgent:
 
         return result
 
+    async def defend_from_result(self, attack_text: str, threat_type: str, red_result: dict) -> Dict[str, Any]:
+        """
+        Process an attack using pre-computed firewall result (from RedTeamAgent).
+        Avoids double-scanning the same input through the firewall.
+
+        Args:
+            attack_text: The attack payload text
+            threat_type: Classification of the attack
+            red_result: Dict from RedTeamAgent._try_attack() with keys:
+                        bypassed (bool), score (float), method (str)
+        """
+        blocked = not red_result["bypassed"]
+        result = {
+            "blocked": blocked,
+            "score": red_result.get("score", 0),
+            "method": red_result.get("method", ""),
+        }
+
+        if blocked:
+            self.blocks += 1
+
+            # Fingerprint the attack
+            fp = await self.fingerprinter.fingerprint(attack_text, threat_type)
+            result["sophistication"] = fp.get("sophistication_score", 0)
+            result["fingerprint"] = fp.get("fingerprint_id", "")
+
+            # Spawn mutations to pre-block variants
+            mutations = await self.mutator.preblock_variants(
+                attack_text, threat_type, self.firewall
+            )
+            self.mutations_spawned += mutations
+            result["mutations"] = mutations
+        else:
+            self.bypasses += 1
+
+            # Auto-patch: add bypassed attack to dynamic rules
+            self.firewall.add_dynamic_rule(attack_text, threat_type)
+            self.auto_patches += 1
+            # Persist to DB so the rule survives restarts
+            if self.db:
+                await self.db.add_dynamic_rule(attack_text, threat_type, source="BLUE_AGENT_PATCH")
+            result["auto_patched"] = True
+
+            log.warning(f"🔧 Blue Agent auto-patched bypass: {threat_type}")
+
+        return result
+
     def status(self) -> Dict[str, Any]:
         total = self.blocks + self.bypasses
         return {
