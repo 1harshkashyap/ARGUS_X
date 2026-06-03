@@ -38,3 +38,6 @@ desktop.ini
 # Logs
 *.log
 logs/
+
+# Verification files
+backend/verify_day2.py
