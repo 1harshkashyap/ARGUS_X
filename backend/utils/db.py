@@ -362,6 +362,17 @@ async def get_xai_decisions(limit: int = 10) -> List[Dict]:
         return []
 
 
+# ── Lifecycle ─────────────────────────────────────────────────────────
+
+async def close_db_client():
+    """Close the httpx client on app shutdown. Prevents connection leaks."""
+    global _http_client
+    if _http_client and not _http_client.is_closed:
+        await _http_client.aclose()
+        _http_client = None
+        logger.info("Supabase HTTP client closed")
+
+
 # ── Health check ──────────────────────────────────────────────────────
 
 async def check_connection() -> bool:

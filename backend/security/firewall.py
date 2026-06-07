@@ -271,9 +271,17 @@ class InputFirewall:
                         continue
                     try:
                         compiled = re.compile(pattern_str, re.IGNORECASE | re.DOTALL)
-                        # Test with a benign string to catch catastrophic backtracking
-                        compiled.search("safe test input string for validation")
+                        # ReDoS protection: test against adversarial string with timeout
+                        # Long string of 'a's triggers catastrophic backtracking in (a+)+
+                        _test_input = "a" * 500 + " safe test input string for validation"
+                        loop = asyncio.get_running_loop()
+                        await asyncio.wait_for(
+                            loop.run_in_executor(None, compiled.search, _test_input),
+                            timeout=1.0  # 1 second max for regex test
+                        )
                         new_rules.append((compiled, threat_type))
+                    except asyncio.TimeoutError:
+                        logger.warning(f"Dynamic rule ReDoS detected (timeout) — skipped: {pattern_str[:50]}")
                     except re.error:
                         logger.warning(f"Invalid dynamic rule pattern skipped: {pattern_str[:50]}")
                     except Exception:

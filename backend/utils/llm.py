@@ -127,17 +127,7 @@ class LLMWrapper:
 
         # ── Priority 4: No key provided ───────────────────────────────
         if key_type == "NONE":
-            # In development: fall back to system key for testing
-            if settings.is_development and settings.GEMINI_API_KEY:
-                logger.info("Dev mode: using system Gemini key (development only)")
-                result = await self._try_gemini(
-                    prompt, system_prompt, settings.GEMINI_API_KEY,
-                    temperature, max_tokens
-                )
-                if result:
-                    result.latency_ms = round((time.time() - start) * 1000, 2)
-                    return result
-            else:
+            if settings.is_production:
                 # Production: require user key — no free rides
                 logger.warning("No API key provided in production mode")
                 return LLMResult(
@@ -146,6 +136,17 @@ class LLMWrapper:
                     error="API_KEY_REQUIRED",
                     latency_ms=round((time.time() - start) * 1000, 2)
                 )
+            # Development: try system key first, then fall through to mock
+            if settings.GEMINI_API_KEY:
+                logger.info("Dev mode: using system Gemini key (development only)")
+                result = await self._try_gemini(
+                    prompt, system_prompt, settings.GEMINI_API_KEY,
+                    temperature, max_tokens
+                )
+                if result:
+                    result.latency_ms = round((time.time() - start) * 1000, 2)
+                    return result
+            # Dev mode: no system key or Gemini failed — fall through to mock
 
         # ── Final fallback: Mock mode ──────────────────────────────────
         logger.info("Falling back to mock mode")

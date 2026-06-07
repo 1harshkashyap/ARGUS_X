@@ -86,8 +86,8 @@ class ChatResponse(BaseModel):
 
     # ── Threat assessment ───────────────────────────────────────
     threat_score: float = Field(default=0.0, ge=0.0, le=1.0)
-    threat_type: ThreatType = ThreatType.CLEAN
-    session_threat_level: ThreatLevel = ThreatLevel.LOW
+    threat_type: str = "CLEAN"
+    session_threat_level: str = "LOW"
 
     # ── Attack intelligence ─────────────────────────────────────
     sophistication_score: int = Field(default=0, ge=0, le=10)

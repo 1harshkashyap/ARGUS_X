@@ -1,31 +1,115 @@
-import asyncio
+import re
 import time
+from collections import defaultdict
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.requests import ClientDisconnect
 
 from config import settings
 from utils.logger import logger
 from routers.health import router as health_router
 from routers.chat import router as chat_router
+from routers.analytics import router as analytics_router
 from security.firewall import firewall
+from utils.db import close_db_client
 
+# ── Log sanitization ─────────────────────────────────────────────────
+_CONTROL_CHAR_RE = re.compile(r'[\x00-\x1f\x7f-\x9f]')
+
+
+def _sanitize_for_log(value: str) -> str:
+    """Remove control characters to prevent log injection."""
+    return _CONTROL_CHAR_RE.sub('', value)
+
+
+# ── Client IP extraction (reverse-proxy aware) ───────────────────────
+
+def _get_client_ip(request: Request) -> str:
+    """
+    Extract real client IP. Checks X-Forwarded-For (set by Railway/nginx
+    proxies) first, falls back to direct connection IP.
+    Only trusts the LAST entry (closest proxy) to prevent spoofing.
+    """
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        # X-Forwarded-For: client, proxy1, proxy2
+        # First IP is the original client
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return "unknown"
+
+
+# ── Rate limiter ──────────────────────────────────────────────────────
+
+class _RateLimiter:
+    """
+    In-memory per-IP sliding-window rate limiter.
+    Thread-safe for asyncio (single event loop).
+    """
+
+    def __init__(self, max_requests: int, window_seconds: int = 60):
+        self._max = max(max_requests, 1)  # Floor at 1 to prevent lockout
+        self._window = window_seconds
+        self._requests: dict = defaultdict(list)
+        self._cleanup_counter = 0
+
+    def is_allowed(self, client_ip: str) -> bool:
+        now = time.time()
+        cutoff = now - self._window
+
+        timestamps = self._requests[client_ip]
+        self._requests[client_ip] = [t for t in timestamps if t > cutoff]
+
+        if len(self._requests[client_ip]) >= self._max:
+            return False
+
+        self._requests[client_ip].append(now)
+
+        self._cleanup_counter += 1
+        if self._cleanup_counter % 500 == 0:
+            self._full_cleanup(cutoff)
+
+        return True
+
+    def _full_cleanup(self, cutoff: float):
+        """Remove IPs with no recent requests."""
+        empty_ips = [ip for ip, ts in self._requests.items()
+                     if not ts or all(t <= cutoff for t in ts)]
+        for ip in empty_ips:
+            del self._requests[ip]
+
+
+_rate_limiter = _RateLimiter(
+    max_requests=settings.RATE_LIMIT_PER_MINUTE,
+    window_seconds=60
+)
+
+# ── Body size limit ──────────────────────────────────────────────────
+# Reject requests > 64KB BEFORE reading the body into memory.
+# Prevents OOM from malicious multi-GB payloads.
+_MAX_BODY_BYTES = 65_536  # 64 KB — enough for 10,000 chars + JSON overhead
+
+
+# ── Lifespan ──────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
 
-    # Initialize firewall (loads dynamic rules from Supabase)
     await firewall.initialize()
     logger.info("Firewall initialized")
 
     logger.info(f"{settings.APP_NAME} ready.")
     yield
 
-    # Graceful shutdown: cancel firewall background refresh task
+    # Graceful shutdown
     await firewall.shutdown()
+    await close_db_client()
     logger.info(f"{settings.APP_NAME} shutting down.")
 
 
@@ -46,35 +130,112 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
+
+# ── Exception handlers ───────────────────────────────────────────────
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Return clean 422 for malformed requests — don't expose internal field paths."""
+    safe_path = _sanitize_for_log(request.url.path)
+    logger.warning(f"Validation error on {safe_path}: {len(exc.errors())} error(s)")
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "VALIDATION_ERROR",
+            "message": "Invalid request format. Check your request body.",
+            "detail_count": len(exc.errors())
+        }
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    logger.error(f"Unhandled exception: {type(exc).__name__} on {request.url.path}")
+    """Catch-all for unhandled exceptions. Never leaks internals."""
+    if isinstance(exc, HTTPException):
+        raise exc
+    logger.error(f"Unhandled exception: {type(exc).__name__} on {_sanitize_for_log(request.url.path)}")
     return JSONResponse(
         status_code=500,
         content={"error": "INTERNAL_ERROR", "message": "An internal error occurred."}
     )
 
+
+# ── Middleware ────────────────────────────────────────────────────────
+# Registration order matters: LAST registered = OUTERMOST (runs first).
+# We want: security_headers (outermost) → body_size_limit → rate_limit → log_requests (innermost)
+# So register in REVERSE: log_requests first, security_headers last.
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+    """Log all requests with timing (except /health to reduce noise)."""
     start = time.time()
     response = await call_next(request)
     duration = round((time.time() - start) * 1000, 2)
     if request.url.path != "/health":
-        logger.info(f"{request.method} {request.url.path} → {response.status_code} ({duration}ms)")
+        safe_path = _sanitize_for_log(request.url.path)
+        logger.info(f"{request.method} {safe_path} → {response.status_code} ({duration}ms)")
     return response
 
-# Register all Day 2 routers
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    """Enforce per-IP rate limiting. Skips health checks."""
+    if request.url.path == "/health":
+        return await call_next(request)
+
+    client_ip = _get_client_ip(request)
+    if not _rate_limiter.is_allowed(client_ip):
+        logger.warning(f"Rate limit exceeded for {_sanitize_for_log(client_ip)}")
+        return JSONResponse(
+            status_code=429,
+            content={"error": "RATE_LIMIT_EXCEEDED", "message": "Too many requests. Please slow down."}
+        )
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def body_size_limit(request: Request, call_next):
+    """Reject oversized request bodies BEFORE reading them into memory."""
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > _MAX_BODY_BYTES:
+        return JSONResponse(
+            status_code=413,
+            content={"error": "PAYLOAD_TOO_LARGE", "message": f"Request body exceeds {_MAX_BODY_BYTES} bytes."}
+        )
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    """Add security headers to EVERY response (outermost middleware)."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=()"
+    return response
+
+
+# ── Routers ───────────────────────────────────────────────────────────
 app.include_router(health_router)
 app.include_router(chat_router)
+app.include_router(analytics_router)
+
 
 @app.get("/", include_in_schema=False)
 async def root():
-    result = {"name": settings.APP_NAME, "version": settings.APP_VERSION, "status": "online"}
+    result = {"status": "online"}
     if not settings.is_production:
+        result["name"] = settings.APP_NAME
+        result["version"] = settings.APP_VERSION
         result["docs"] = "/docs"
     return result
+
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000,
-                reload=settings.is_development, log_level="info")
+                reload=settings.is_development, log_level="info",
+                proxy_headers=True, forwarded_allow_ips="*")
