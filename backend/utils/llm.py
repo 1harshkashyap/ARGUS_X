@@ -174,7 +174,7 @@ class LLMWrapper:
                 with self._gemini_lock:
                     genai.configure(api_key=api_key)
                     model = genai.GenerativeModel(
-                        model_name="gemini-1.5-flash",
+                        model_name="gemini-2.0-flash",
                         system_instruction=system_prompt,
                         generation_config=genai.GenerationConfig(
                             temperature=temperature,

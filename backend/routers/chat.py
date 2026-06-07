@@ -8,6 +8,7 @@ from utils.session import session_tracker
 from security.firewall import firewall
 from security.fingerprinter import fingerprinter
 from security.xai_engine import xai_engine
+from security.mutation_engine import mutation_engine
 from schemas.chat import ChatRequest, ChatResponse
 from config import settings
 
@@ -152,10 +153,22 @@ async def chat(request: ChatRequest) -> ChatResponse:
             llm_mode=llm_mode
         )
 
-        # ── Step 9: DB Logging (fire-and-forget) ──────────────────
-        task = asyncio.create_task(_log_to_db(request, response), name="db_log")
-        _background_tasks.add(task)
-        task.add_done_callback(_background_tasks.discard)
+        # ── Step 9: Background tasks (fire-and-forget) ────────────
+        db_task = asyncio.create_task(_log_to_db(request, response), name="db_log")
+        _background_tasks.add(db_task)
+        db_task.add_done_callback(_background_tasks.discard)
+
+        if firewall_result.blocked:
+            mut_task = asyncio.create_task(
+                mutation_engine.generate(
+                    blocked_message=request.message,
+                    threat_type=firewall_result.threat_type,
+                    session_id=request.session_id
+                ),
+                name="mutation"
+            )
+            _background_tasks.add(mut_task)
+            mut_task.add_done_callback(_background_tasks.discard)
 
         return response
 
