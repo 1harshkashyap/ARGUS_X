@@ -3,7 +3,7 @@ import asyncio
 import time
 from typing import List, Optional
 from utils.logger import logger
-from utils.db import add_dynamic_rule, get_dynamic_rules
+from utils.db import add_dynamic_rule
 from config import settings
 
 
@@ -270,7 +270,7 @@ class MutationEngine:
         Returns list or empty list on any failure. Never raises.
         """
         try:
-            import google.generativeai as genai
+            import google.generativeai as genai  # type: ignore
 
             prompt = f"""You are a cybersecurity researcher studying prompt injection attacks.
 
@@ -285,10 +285,10 @@ Output ONLY the 15 variants, one per line, numbered 1-15.
 No explanations. No headers. Just the numbered list."""
 
             def _call():
-                genai.configure(api_key=settings.GEMINI_API_KEY)
-                model = genai.GenerativeModel(
+                genai.configure(api_key=settings.GEMINI_API_KEY)  # type: ignore
+                model = genai.GenerativeModel(  # type: ignore
                     model_name="gemini-2.0-flash",
-                    generation_config=genai.GenerationConfig(
+                    generation_config=genai.GenerationConfig(  # type: ignore
                         temperature=0.9,
                         max_output_tokens=1024,
                     )

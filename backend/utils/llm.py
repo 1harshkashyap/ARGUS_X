@@ -4,8 +4,8 @@ import time
 import hashlib
 from dataclasses import dataclass, field
 from typing import Optional
-import google.generativeai as genai
-from openai import AsyncOpenAI
+import google.generativeai as genai  # type: ignore
+from openai import AsyncOpenAI  # type: ignore
 from utils.logger import logger
 from config import settings
 
@@ -98,7 +98,7 @@ class LLMWrapper:
         logger.info(f"LLM request — key_type: {key_type}, env: {settings.ENVIRONMENT}")
 
         # ── Priority 1: User's own Gemini key ────────────────────────
-        if key_type == "GEMINI":
+        if key_type == "GEMINI" and user_api_key:
             result = await self._try_gemini(
                 prompt, system_prompt, user_api_key, temperature, max_tokens
             )
@@ -107,7 +107,7 @@ class LLMWrapper:
                 return result
 
         # ── Priority 2: User's own OpenAI key ────────────────────────
-        if key_type == "OPENAI":
+        if key_type == "OPENAI" and user_api_key:
             result = await self._try_openai(
                 prompt, system_prompt, user_api_key, temperature, max_tokens
             )
@@ -172,11 +172,11 @@ class LLMWrapper:
         try:
             def _call():
                 with self._gemini_lock:
-                    genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel(
+                    genai.configure(api_key=api_key)  # type: ignore
+                    model = genai.GenerativeModel(  # type: ignore
                         model_name="gemini-2.0-flash",
                         system_instruction=system_prompt,
-                        generation_config=genai.GenerationConfig(
+                        generation_config=genai.GenerationConfig(  # type: ignore
                             temperature=temperature,
                             max_output_tokens=max_tokens,
                         )
@@ -195,7 +195,7 @@ class LLMWrapper:
                 return LLMResult(
                     content=content.strip(),
                     mode="GEMINI_FLASH",
-                    model_used="gemini-1.5-flash"
+                    model_used="gemini-2.0-flash"
                 )
             return None
 
