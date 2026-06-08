@@ -1,3 +1,4 @@
+import asyncio
 import re
 import time
 from collections import defaultdict
@@ -13,6 +14,8 @@ from utils.logger import logger
 from routers.health import router as health_router
 from routers.chat import router as chat_router
 from routers.analytics import router as analytics_router
+from routers.battle import router as battle_router
+from routers.agents import router as agents_router
 from security.firewall import firewall
 from utils.db import close_db_client
 
@@ -101,16 +104,41 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
 
+    # Initialize firewall first (battle engine depends on it)
     await firewall.initialize()
     logger.info("Firewall initialized")
+
+    # Start battle engine if enabled
+    battle_task = None
+    if settings.BATTLE_ENABLED:
+        from agents.battle_engine import battle_engine
+        battle_task = asyncio.create_task(
+            battle_engine.run(),
+            name="battle_engine"
+        )
+        logger.info(
+            f"Battle engine started "
+            f"(interval={settings.BATTLE_INTERVAL_SECONDS}s)"
+        )
+    else:
+        logger.info("Battle engine disabled (BATTLE_ENABLED=false)")
 
     logger.info(f"{settings.APP_NAME} ready.")
     yield
 
     # Graceful shutdown
+    logger.info(f"{settings.APP_NAME} shutting down...")
+    if battle_task and not battle_task.done():
+        battle_task.cancel()
+        try:
+            await asyncio.gather(battle_task, return_exceptions=True)
+        except Exception:
+            pass
+        logger.info("Battle engine stopped")
+
     await firewall.shutdown()
     await close_db_client()
-    logger.info(f"{settings.APP_NAME} shutting down.")
+    logger.info(f"{settings.APP_NAME} shutdown complete.")
 
 
 app = FastAPI(
@@ -222,6 +250,8 @@ async def security_headers(request: Request, call_next):
 app.include_router(health_router)
 app.include_router(chat_router)
 app.include_router(analytics_router)
+app.include_router(battle_router)
+app.include_router(agents_router)
 
 
 @app.get("/", include_in_schema=False)

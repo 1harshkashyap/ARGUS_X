@@ -10,6 +10,7 @@ from security.fingerprinter import fingerprinter
 from security.xai_engine import xai_engine
 from security.mutation_engine import mutation_engine
 from schemas.chat import ChatRequest, ChatResponse
+from agents.correlator import check_and_record_campaign
 from config import settings
 
 router = APIRouter(prefix="/api/v1", tags=["Chat"])
@@ -169,6 +170,17 @@ async def chat(request: ChatRequest) -> ChatResponse:
             )
             _background_tasks.add(mut_task)
             mut_task.add_done_callback(_background_tasks.discard)
+
+            corr_task = asyncio.create_task(
+                check_and_record_campaign(
+                    session_id=request.session_id,
+                    pattern_family=firewall_result.threat_type,
+                    attack_fingerprint=response.attack_fingerprint
+                ),
+                name="correlator"
+            )
+            _background_tasks.add(corr_task)
+            corr_task.add_done_callback(_background_tasks.discard)
 
         return response
 
