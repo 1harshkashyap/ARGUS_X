@@ -143,7 +143,7 @@ class RedAgent:
         start = time.monotonic()
 
         # Clamp tier to valid range
-        tier = max(1, min(5, int(tier)))
+        tier = max(1, min(5, tier))
         strategy = _TIER_STRATEGIES[tier]
 
         try:

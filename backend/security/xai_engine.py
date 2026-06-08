@@ -72,7 +72,7 @@ class XAIEngine:
                 fingerprint_result = FingerprintResult()
 
             # Clamp session_level to valid set
-            if session_level not in _VALID_SESSION_LEVELS:
+            if session_level is None or session_level not in _VALID_SESSION_LEVELS:
                 session_level = "LOW"
 
             # ── Build 3 layers ────────────────────────────────────
