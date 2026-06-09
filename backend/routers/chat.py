@@ -45,11 +45,13 @@ async def chat(request: ChatRequest) -> ChatResponse:
     1. API key validation (BYOAK)
     2. Session threat level check
     3. Regex firewall analysis
-    4. LLM response (if not blocked)
-    5. Sophistication scoring
-    6. XAI explanation building
-    7. Session update
-    8. Database logging (fire-and-forget)
+    4. ML classifier (if not blocked by firewall)
+    5. LLM response (if not blocked by firewall or ML)
+    6. Sophistication scoring
+    7. XAI explanation building
+    8. Session update
+    9. Compute final fields
+    10. Database logging (fire-and-forget)
 
     Always returns a valid ChatResponse — never raises to the client.
     """
@@ -150,7 +152,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
             firewall_result=firewall_result,
             ml_result=ml_result,
             fingerprint_result=fp_result,
-            session_level=session_level
+            session_level=session_level,
+            combined_blocked=combined_blocked,
         )
 
         # ── Step 8: Session Update ────────────────────────────────

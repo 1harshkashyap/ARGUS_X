@@ -47,16 +47,18 @@ class XAIEngine:
         firewall_result: Optional[FirewallResult] = None,
         ml_result: Optional[Any] = None,
         fingerprint_result: Optional[FingerprintResult] = None,
-        session_level: Optional[str] = None
+        session_level: Optional[str] = None,
+        combined_blocked: bool = False,
     ) -> XAIExplanation:
         """
         Build a 3-layer XAI explanation.
 
         Args:
             firewall_result:    From InputFirewall.analyze()
-            ml_result:          From MLClassifier (None until Day 7)
+            ml_result:          From MLClassifier (None if skipped)
             fingerprint_result: From AttackFingerprinter.fingerprint()
             session_level:      LOW | MEDIUM | HIGH | CRITICAL
+            combined_blocked:   True if firewall OR ML blocked the request
 
         Returns:
             XAIExplanation with exactly 3 LayerDecisions — always.
@@ -85,8 +87,8 @@ class XAIEngine:
             assert len(layers) == 3
 
             # ── Derive high-level fields ──────────────────────────
-            action        = self._action(firewall_result, fingerprint_result, session_level)
-            primary_reason= self._primary_reason(firewall_result, fingerprint_result)
+            action        = self._action(firewall_result, fingerprint_result, session_level, combined_blocked)
+            primary_reason= self._primary_reason(firewall_result, fingerprint_result, ml_result, combined_blocked)
             evolution_note= self._evolution_note(fingerprint_result)
 
             result = XAIExplanation(
@@ -219,14 +221,16 @@ class XAIEngine:
         self,
         fr: FirewallResult,
         fp: FingerprintResult,
-        sl: str
+        sl: str,
+        combined_blocked: bool = False,
     ) -> str:
         """
         Determine recommended action.
         Evaluated in priority order — first match wins.
+        Uses combined_blocked so ML-only blocks get correct actions.
         """
         sc = fp.sophistication_score
-        bl = fr.blocked
+        bl = combined_blocked  # Use combined (firewall OR ML) instead of just fr.blocked
         for action, condition in _ACTION_MAP.items():
             try:
                 if condition(sl, sc, bl):
@@ -238,18 +242,30 @@ class XAIEngine:
     def _primary_reason(
         self,
         fr: FirewallResult,
-        fp: FingerprintResult
+        fp: FingerprintResult,
+        ml_result: Optional[Any] = None,
+        combined_blocked: bool = False,
     ) -> str:
-        if not fr.blocked:
-            return "Request is clean — no threat signatures detected."
-        threat = fr.threat_type.replace("_", " ").title()
-        score  = fp.sophistication_score
-        label  = fp.sophistication_label
-        rule   = fr.matched_rule or "unknown"
-        return (
-            f"Detected {threat} — {label}-tier attack "
-            f"(sophistication {score}/10). Rule: {rule}."
-        )
+        # Firewall blocked — use firewall details
+        if fr.blocked:
+            threat = fr.threat_type.replace("_", " ").title()
+            score  = fp.sophistication_score
+            label  = fp.sophistication_label
+            rule   = fr.matched_rule or "unknown"
+            return (
+                f"Detected {threat} — {label}-tier attack "
+                f"(sophistication {score}/10). Rule: {rule}."
+            )
+        # ML blocked (firewall passed) — use ML details
+        if combined_blocked and ml_result is not None:
+            confidence = float(getattr(ml_result, "confidence", 0.0))
+            return (
+                f"ML classifier detected threat — "
+                f"{confidence:.0%} semantic threat probability. "
+                f"Category: Prompt Injection."
+            )
+        # Nothing blocked
+        return "Request is clean — no threat signatures detected."
 
     def _evolution_note(self, fp: FingerprintResult) -> str:
         sc = fp.sophistication_score
