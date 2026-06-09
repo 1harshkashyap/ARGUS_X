@@ -67,7 +67,16 @@ async def health_check() -> HealthResponse:
         services["llm"] = "error"
 
     # ML classifier status
-    services["ml_classifier"] = "disabled" if not settings.ML_ENABLED else "enabled"
+    try:
+        from security.ml_classifier import ml_classifier
+        if ml_classifier.available:
+            services["ml_classifier"] = "online"
+        elif settings.ML_ENABLED:
+            services["ml_classifier"] = "degraded"
+        else:
+            services["ml_classifier"] = "disabled"
+    except Exception:
+        services["ml_classifier"] = "unknown"
 
     # Battle engine status
     services["battle_engine"] = "disabled" if not settings.BATTLE_ENABLED else "enabled"

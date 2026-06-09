@@ -6,6 +6,7 @@ from utils.llm import llm, detect_key_type
 from utils.db import log_event, log_xai_decision, update_stats
 from utils.session import session_tracker
 from security.firewall import firewall
+from security.ml_classifier import ml_classifier, MLResult
 from security.fingerprinter import fingerprinter
 from security.xai_engine import xai_engine
 from security.mutation_engine import mutation_engine
@@ -82,18 +83,36 @@ async def chat(request: ChatRequest) -> ChatResponse:
         # ── Step 3: Regex Firewall ────────────────────────────────
         firewall_result = await firewall.analyze(request.message, request.session_id)
 
-        # ── Step 4: LLM Response (only if not blocked) ────────────
+        # ── Step 4: ML Classifier (only if not blocked by firewall) ─
+        ml_result: MLResult | None = None
+        if not firewall_result.blocked and ml_classifier.available:
+            ml_result = ml_classifier.classify(request.message)
+            if ml_result.triggered and ml_result.confidence >= settings.FIREWALL_ML_THRESHOLD:
+                logger.info(
+                    f"ML classifier flagged message: "
+                    f"conf={ml_result.confidence:.3f} "
+                    f"session={request.session_id[:8]}..."
+                )
+
+        # Combined block decision: firewall OR ML with high confidence
+        combined_blocked = firewall_result.blocked or (
+            ml_result is not None
+            and ml_result.triggered
+            and ml_result.confidence >= settings.FIREWALL_ML_THRESHOLD
+        )
+
+        # ── Step 5: LLM Response (only if neither firewall nor ML blocked) ─
         llm_response = ""
         llm_mode = "NONE"
 
-        if not firewall_result.blocked:
-            llm_result = await llm.generate(
+        if not combined_blocked:
+            llm_result_llm = await llm.generate(
                 prompt=request.message,
                 system_prompt=_SYSTEM_PROMPT,
                 user_api_key=request.api_key
             )
 
-            if llm_result.error == "API_KEY_REQUIRED":
+            if llm_result_llm.error == "API_KEY_REQUIRED":
                 return ChatResponse(
                     response="Please provide your free Gemini API key. Get one at https://aistudio.google.com",
                     blocked=False,
@@ -102,7 +121,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
                     latency_ms=round((time.time() - start) * 1000, 2)
                 )
 
-            if llm_result.error == "INVALID_API_KEY":
+            if llm_result_llm.error == "INVALID_API_KEY":
                 return ChatResponse(
                     response="Your API key appears to be invalid. Please check it and try again.",
                     blocked=False,
@@ -111,38 +130,43 @@ async def chat(request: ChatRequest) -> ChatResponse:
                     latency_ms=round((time.time() - start) * 1000, 2)
                 )
 
-            llm_response = llm_result.content
-            llm_mode = llm_result.mode
+            llm_response = llm_result_llm.content
+            llm_mode = llm_result_llm.mode
 
-        # ── Step 5: Sophistication Scoring (real module) ──────────
+        # ── Step 6: Sophistication Scoring (real module) ──────────
+        threat_type_for_fp = firewall_result.threat_type
+        if combined_blocked and not firewall_result.blocked:
+            # ML caught it — label as PROMPT_INJECTION
+            threat_type_for_fp = "PROMPT_INJECTION"
+
         fp_result = fingerprinter.fingerprint(
             message=request.message,
-            threat_type=firewall_result.threat_type,
-            is_blocked=firewall_result.blocked
+            threat_type=threat_type_for_fp,
+            is_blocked=combined_blocked
         )
 
-        # ── Step 6: XAI Explanation (real module) ─────────────────
+        # ── Step 7: XAI Explanation (real module) ─────────────────
         explanation = xai_engine.explain(
             firewall_result=firewall_result,
-            ml_result=None,
+            ml_result=ml_result,
             fingerprint_result=fp_result,
             session_level=session_level
         )
 
-        # ── Step 7: Session Update ────────────────────────────────
+        # ── Step 8: Session Update ────────────────────────────────
         new_session_level = session_tracker.update(
-            request.session_id,
-            was_threat=firewall_result.blocked,
+            session_id=request.session_id,
+            was_threat=combined_blocked,
             threat_type=firewall_result.threat_type
         )
 
-        # ── Step 8: Compute final fields ──────────────────────────
+        # ── Step 9: Compute final fields ──────────────────────────
         latency = round((time.time() - start) * 1000, 2)
 
         response = ChatResponse(
-            response=llm_response if not firewall_result.blocked
+            response=llm_response if not combined_blocked
                      else f"🛡 Request blocked: {explanation.primary_reason}",
-            blocked=firewall_result.blocked,
+            blocked=combined_blocked,
             threat_score=firewall_result.confidence,
             threat_type=firewall_result.threat_type,
             session_threat_level=new_session_level,
@@ -154,12 +178,12 @@ async def chat(request: ChatRequest) -> ChatResponse:
             llm_mode=llm_mode
         )
 
-        # ── Step 9: Background tasks (fire-and-forget) ────────────
+        # ── Step 10: Background tasks (fire-and-forget) ───────────
         db_task = asyncio.create_task(_log_to_db(request, response), name="db_log")
         _background_tasks.add(db_task)
         db_task.add_done_callback(_background_tasks.discard)
 
-        if firewall_result.blocked:
+        if combined_blocked:
             mut_task = asyncio.create_task(
                 mutation_engine.generate(
                     blocked_message=request.message,

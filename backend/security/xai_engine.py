@@ -149,20 +149,35 @@ class XAIEngine:
             )
 
         # Day 7+ path — ml_result has triggered, confidence, method attrs
-        triggered   = bool(getattr(ml_result, "triggered",   False))
-        confidence  = float(getattr(ml_result, "confidence", 0.0))
-        method      = str(getattr(ml_result,   "method",     "UNKNOWN"))
-        confidence  = max(0.0, min(1.0, confidence))
+        triggered  = bool(getattr(ml_result, "triggered",  False))
+        confidence = float(getattr(ml_result, "confidence", 0.0))
+        method     = str(getattr(ml_result,   "method",    "UNKNOWN"))
+        confidence = max(0.0, min(1.0, confidence))
+        latency    = float(getattr(ml_result, "latency_ms", 0.0))
+
+        if method == "UNAVAILABLE":
+            reasoning = "ML classifier not loaded. Model file may be missing."
+            signals   = ["Method: UNAVAILABLE", "Run: python scripts/download_model.py"]
+        elif method == "ERROR":
+            reasoning = "ML classifier encountered an inference error."
+            signals   = ["Method: ERROR"]
+        else:
+            reasoning = (
+                f"Semantic analysis: {confidence:.0%} threat probability "
+                f"via {method} inference ({latency:.0f}ms)."
+            )
+            signals = [
+                f"Method: {method}",
+                f"Semantic threat probability: {confidence:.1%}",
+                f"Inference time: {latency:.1f}ms",
+            ]
 
         return LayerDecision(
             layer_name="ML Classifier",
             triggered=triggered,
             confidence=confidence,
-            signals=[f"Method: {method}", f"Semantic probability: {confidence:.0%}"],
-            reasoning=(
-                f"Semantic analysis: {confidence:.0%} threat probability "
-                f"via {method} inference."
-            )
+            signals=signals,
+            reasoning=reasoning
         )
 
     def _layer_session(self, session_level: str) -> LayerDecision:
