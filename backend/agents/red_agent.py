@@ -238,7 +238,7 @@ class RedAgent:
                 response = model.generate_content(user_prompt)
                 return response.text
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             text = await asyncio.wait_for(
                 loop.run_in_executor(None, _call),
                 timeout=_GEMINI_TIMEOUT

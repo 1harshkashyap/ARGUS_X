@@ -39,8 +39,11 @@ def _get_client_ip(request: Request) -> str:
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         # X-Forwarded-For: client, proxy1, proxy2
-        # First IP is the original client
-        return forwarded.split(",")[0].strip()
+        # Last entry is set by the closest trusted proxy — hardest to spoof.
+        # First entry is trivially spoofed by the client.
+        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        if parts:
+            return parts[-1]
     if request.client:
         return request.client.host
     return "unknown"
@@ -225,11 +228,19 @@ async def rate_limit_middleware(request: Request, call_next):
 async def body_size_limit(request: Request, call_next):
     """Reject oversized request bodies BEFORE reading them into memory."""
     content_length = request.headers.get("content-length")
-    if content_length and int(content_length) > _MAX_BODY_BYTES:
-        return JSONResponse(
-            status_code=413,
-            content={"error": "PAYLOAD_TOO_LARGE", "message": f"Request body exceeds {_MAX_BODY_BYTES} bytes."}
-        )
+    if content_length:
+        try:
+            length = int(content_length)
+        except (ValueError, OverflowError):
+            return JSONResponse(
+                status_code=400,
+                content={"error": "INVALID_CONTENT_LENGTH", "message": "Invalid Content-Length header."}
+            )
+        if length > _MAX_BODY_BYTES:
+            return JSONResponse(
+                status_code=413,
+                content={"error": "PAYLOAD_TOO_LARGE", "message": f"Request body exceeds {_MAX_BODY_BYTES} bytes."}
+            )
     return await call_next(request)
 
 
