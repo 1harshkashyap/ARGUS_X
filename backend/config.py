@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     )
     MAX_MESSAGE_LENGTH: int = Field(default=10000)
     RATE_LIMIT_PER_MINUTE: int = Field(default=30)
+    DASHBOARD_READ_KEY: str = Field(
+        default="argus-dashboard-2025",
+        description="Key for unauthenticated dashboard read endpoints"
+    )
 
     # ── Battle Engine ─────────────────────────────────────────────────
     BATTLE_ENABLED: bool = Field(default=False)

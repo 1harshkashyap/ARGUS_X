@@ -1,7 +1,8 @@
 import time
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from utils.logger import logger
 from utils.db import get_battle_state
+from utils.auth import require_dashboard_key
 from schemas.agents import BattleState
 
 router = APIRouter(prefix="/api/v1/battle", tags=["Battle"])
@@ -14,7 +15,8 @@ router = APIRouter(prefix="/api/v1/battle", tags=["Battle"])
     description=(
         "Returns current battle state from in-memory engine + Supabase. "
         "Always HTTP 200. Safe defaults if unavailable."
-    )
+    ),
+    dependencies=[Depends(require_dashboard_key)]
 )
 async def get_state() -> BattleState:
     """

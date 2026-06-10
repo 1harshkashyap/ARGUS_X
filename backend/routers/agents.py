@@ -1,8 +1,9 @@
 import asyncio
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from typing import Any, Dict
 from utils.logger import logger
+from utils.auth import require_dashboard_key
 from schemas.agents import AgentStatus
 
 router = APIRouter(prefix="/api/v1/agents", tags=["Agents"])
@@ -17,7 +18,8 @@ class SimpleResponse(BaseModel):
     "/status",
     response_model=AgentStatus,
     summary="Agent system status",
-    description="Returns current agent status including pause state and tier."
+    description="Returns current agent status including pause state and tier.",
+    dependencies=[Depends(require_dashboard_key)]
 )
 async def get_status() -> AgentStatus:
     """Returns battle engine agent status. Always 200."""
@@ -40,7 +42,8 @@ async def get_status() -> AgentStatus:
     "/pause",
     response_model=SimpleResponse,
     summary="Pause battle engine",
-    description="Pauses the autonomous battle loop. Current tick completes first."
+    description="Pauses the autonomous battle loop. Current tick completes first.",
+    dependencies=[Depends(require_dashboard_key)]
 )
 async def pause_engine() -> SimpleResponse:
     """Pause the battle engine loop."""
@@ -58,7 +61,8 @@ async def pause_engine() -> SimpleResponse:
     "/resume",
     response_model=SimpleResponse,
     summary="Resume battle engine",
-    description="Resumes the autonomous battle loop."
+    description="Resumes the autonomous battle loop.",
+    dependencies=[Depends(require_dashboard_key)]
 )
 async def resume_engine() -> SimpleResponse:
     """Resume the battle engine loop."""
@@ -79,7 +83,8 @@ async def resume_engine() -> SimpleResponse:
         "Triggers one battle tick immediately regardless of pause state. "
         "Returns battle state after the tick. May take up to 35 seconds "
         "(Gemini call). Always HTTP 200."
-    )
+    ),
+    dependencies=[Depends(require_dashboard_key)]
 )
 async def force_cycle() -> Dict[str, Any]:
     """Force one immediate battle tick. Returns state after tick."""
@@ -95,5 +100,6 @@ async def force_cycle() -> Dict[str, Any]:
         return {
             "success": False,
             "error": type(e).__name__,
-            "message": "Cycle failed — check server logs"
+            "message": "Cycle failed -- check server logs"
         }
+

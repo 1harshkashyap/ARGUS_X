@@ -193,7 +193,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 # ── Middleware ────────────────────────────────────────────────────────
 # Registration order matters: LAST registered = OUTERMOST (runs first).
-# We want: security_headers (outermost) → body_size_limit → rate_limit → log_requests (innermost)
+# We want: security_headers (outermost) -> body_size_limit -> rate_limit -> log_requests (innermost)
 # So register in REVERSE: log_requests first, security_headers last.
 
 @app.middleware("http")
@@ -204,7 +204,7 @@ async def log_requests(request: Request, call_next):
     duration = round((time.time() - start) * 1000, 2)
     if request.url.path != "/health":
         safe_path = _sanitize_for_log(request.url.path)
-        logger.info(f"{request.method} {safe_path} → {response.status_code} ({duration}ms)")
+        logger.info(f"{request.method} {safe_path} -> {response.status_code} ({duration}ms)")
     return response
 
 

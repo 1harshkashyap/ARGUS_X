@@ -1,6 +1,7 @@
 import time
 from typing import Optional
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
+from utils.auth import require_dashboard_key
 from utils.logger import logger
 from utils.db import (
     get_stats, get_recent_events,
@@ -24,7 +25,8 @@ _MODULE_START = time.monotonic()
     description=(
         "Running totals, block rate, session stats, battle state. "
         "Always returns HTTP 200. Safe defaults if DB unavailable."
-    )
+    ),
+    dependencies=[Depends(require_dashboard_key)]
 )
 async def get_system_stats() -> StatsResponse:
     """
@@ -78,7 +80,8 @@ async def get_system_stats() -> StatsResponse:
     description=(
         "Returns the N most recent security events from Supabase. "
         "Always HTTP 200. Empty list if DB unavailable."
-    )
+    ),
+    dependencies=[Depends(require_dashboard_key)]
 )
 async def get_logs(
     limit: int = Query(
@@ -117,7 +120,8 @@ async def get_logs(
     description=(
         "Returns the N most recent XAI layer decisions from Supabase. "
         "Always HTTP 200. Empty list if DB unavailable."
-    )
+    ),
+    dependencies=[Depends(require_dashboard_key)]
 )
 async def get_xai(
     limit: int = Query(
