@@ -9,6 +9,8 @@ NOT used on:
   - /chat   (uses BYOAK api_key in request body)
 """
 
+import hmac
+
 from fastapi import Request, HTTPException
 from config import settings
 from utils.logger import logger
@@ -45,7 +47,7 @@ async def require_dashboard_key(request: Request) -> None:
             }
         )
 
-    if key != settings.DASHBOARD_READ_KEY:
+    if not hmac.compare_digest(key, settings.DASHBOARD_READ_KEY):
         logger.warning(
             f"Invalid dashboard key on: {request.url.path}"
         )
