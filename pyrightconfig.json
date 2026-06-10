@@ -1,12 +1,13 @@
 {
-  "executionEnvironments": [
-    {
-      "root": "backend",
-      "extraPaths": ["backend"]
-    }
-  ],
+  "extraPaths": ["backend"],
   "venvPath": "backend",
-  "venv": "venv_linux",
+  "venv": "venv",
   "reportMissingImports": "warning",
-  "pythonVersion": "3.13"
+  "pythonVersion": "3.14",
+  "pythonPlatform": "Windows",
+  "exclude": [
+    "**/venv/**",
+    "**/venv_linux/**",
+    "**/__pycache__/**"
+  ]
 }
