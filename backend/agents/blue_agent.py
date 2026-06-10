@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Optional, List
 from utils.logger import logger
 from utils.db import add_dynamic_rule
+from utils.llm import gemini_lock
 from security.mutation_engine import _validate_pattern, _is_redos_safe
 from config import settings
 
@@ -199,17 +200,18 @@ The pattern will be used with re.compile(pattern, re.IGNORECASE | re.DOTALL)"""
                 import google.generativeai as genai  # type: ignore
 
                 def _call() -> str:
-                    genai.configure(api_key=settings.GEMINI_API_KEY)  # type: ignore
-                    model = genai.GenerativeModel(  # type: ignore
-                        model_name="gemini-2.0-flash",
-                        system_instruction=system_prompt,
-                        generation_config=genai.GenerationConfig(  # type: ignore
-                            temperature=0.3,  # Low temp = consistent, precise output
-                            max_output_tokens=256,
+                    with gemini_lock:
+                        genai.configure(api_key=settings.GEMINI_API_KEY)  # type: ignore
+                        model = genai.GenerativeModel(  # type: ignore
+                            model_name="gemini-2.0-flash",
+                            system_instruction=system_prompt,
+                            generation_config=genai.GenerationConfig(  # type: ignore
+                                temperature=0.3,  # Low temp = consistent, precise output
+                                max_output_tokens=256,
+                            )
                         )
-                    )
-                    response = model.generate_content(user_prompt)
-                    return response.text
+                        response = model.generate_content(user_prompt)
+                        return response.text
 
                 loop = asyncio.get_running_loop()
                 raw = await asyncio.wait_for(

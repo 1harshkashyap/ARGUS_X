@@ -61,12 +61,9 @@ async def log_event(event: Dict[str, Any]) -> bool:
     if not client:
         return False
     try:
-        response = await asyncio.wait_for(
-            client.post(_rest_url("events"), json=event),
-            timeout=settings.DB_TIMEOUT,
-        )
+        response = await client.post(_rest_url("events"), json=event)
         return response.status_code in (200, 201)
-    except asyncio.TimeoutError:
+    except httpx.TimeoutException:
         logger.warning(f"log_event timed out after {settings.DB_TIMEOUT}s")
         return False
     except Exception as e:
@@ -80,12 +77,9 @@ async def log_xai_decision(decision: Dict[str, Any]) -> bool:
     if not client:
         return False
     try:
-        response = await asyncio.wait_for(
-            client.post(_rest_url("xai_decisions"), json=decision),
-            timeout=settings.DB_TIMEOUT,
-        )
+        response = await client.post(_rest_url("xai_decisions"), json=decision)
         return response.status_code in (200, 201)
-    except asyncio.TimeoutError:
+    except httpx.TimeoutException:
         logger.warning(f"log_xai_decision timed out after {settings.DB_TIMEOUT}s")
         return False
     except Exception as e:
@@ -99,16 +93,13 @@ async def update_battle_state(state: Dict[str, Any]) -> bool:
     if not client:
         return False
     try:
-        response = await asyncio.wait_for(
-            client.patch(
-                _rest_url("battle_state"),
-                params={"id": "eq.1"},
-                json=state,
-            ),
-            timeout=settings.DB_TIMEOUT,
+        response = await client.patch(
+            _rest_url("battle_state"),
+            params={"id": "eq.1"},
+            json=state,
         )
         return response.status_code in (200, 204)
-    except asyncio.TimeoutError:
+    except httpx.TimeoutException:
         logger.warning(f"update_battle_state timed out after {settings.DB_TIMEOUT}s")
         return False
     except Exception as e:
@@ -128,12 +119,9 @@ async def update_stats(increments: Dict[str, int]) -> bool:
             return False
         try:
             # Read current stats
-            response = await asyncio.wait_for(
-                client.get(
-                    _rest_url("stats"),
-                    params={"id": "eq.1", "select": "*"},
-                ),
-                timeout=settings.DB_TIMEOUT,
+            response = await client.get(
+                _rest_url("stats"),
+                params={"id": "eq.1", "select": "*"},
             )
             if response.status_code != 200:
                 return False
@@ -147,16 +135,13 @@ async def update_stats(increments: Dict[str, int]) -> bool:
             for key, inc in increments.items():
                 updates[key] = current.get(key, 0) + inc
 
-            response = await asyncio.wait_for(
-                client.patch(
-                    _rest_url("stats"),
-                    params={"id": "eq.1"},
-                    json=updates,
-                ),
-                timeout=settings.DB_TIMEOUT,
+            response = await client.patch(
+                _rest_url("stats"),
+                params={"id": "eq.1"},
+                json=updates,
             )
             return response.status_code in (200, 204)
-        except asyncio.TimeoutError:
+        except httpx.TimeoutException:
             logger.warning(f"update_stats timed out after {settings.DB_TIMEOUT}s")
             return False
         except Exception as e:
@@ -170,19 +155,16 @@ async def add_dynamic_rule(pattern: str, threat_type: str, source_attack: str) -
     if not client:
         return False
     try:
-        response = await asyncio.wait_for(
-            client.post(
-                _rest_url("dynamic_rules"),
-                json={
-                    "pattern": pattern,
-                    "threat_type": threat_type,
-                    "source_attack": source_attack[:200],
-                },
-            ),
-            timeout=settings.DB_TIMEOUT,
+        response = await client.post(
+            _rest_url("dynamic_rules"),
+            json={
+                "pattern": pattern,
+                "threat_type": threat_type,
+                "source_attack": source_attack[:200],
+            },
         )
         return response.status_code in (200, 201)
-    except asyncio.TimeoutError:
+    except httpx.TimeoutException:
         logger.warning(f"add_dynamic_rule timed out after {settings.DB_TIMEOUT}s")
         return False
     except Exception as e:
@@ -198,16 +180,13 @@ async def add_campaign(campaign: Dict[str, Any]) -> bool:
     try:
         # Upsert via PostgREST: Prefer: resolution=merge-duplicates
         headers = {"Prefer": "return=representation,resolution=merge-duplicates"}
-        response = await asyncio.wait_for(
-            client.post(
-                _rest_url("campaigns"),
-                json=campaign,
-                headers=headers,
-            ),
-            timeout=settings.DB_TIMEOUT,
+        response = await client.post(
+            _rest_url("campaigns"),
+            json=campaign,
+            headers=headers,
         )
         return response.status_code in (200, 201)
-    except asyncio.TimeoutError:
+    except httpx.TimeoutException:
         logger.warning(f"add_campaign timed out after {settings.DB_TIMEOUT}s")
         return False
     except Exception as e:
@@ -224,16 +203,13 @@ async def get_recent_events(limit: int = 20) -> List[Dict]:
     if not client:
         return []
     try:
-        response = await asyncio.wait_for(
-            client.get(
-                _rest_url("events"),
-                params={
-                    "select": "*",
-                    "order": "created_at.desc",
-                    "limit": str(limit),
-                },
-            ),
-            timeout=settings.DB_TIMEOUT,
+        response = await client.get(
+            _rest_url("events"),
+            params={
+                "select": "*",
+                "order": "created_at.desc",
+                "limit": str(limit),
+            },
         )
         if response.status_code == 200:
             return response.json()
@@ -254,12 +230,9 @@ async def get_stats() -> Dict[str, Any]:
     if not client:
         return default
     try:
-        response = await asyncio.wait_for(
-            client.get(
-                _rest_url("stats"),
-                params={"id": "eq.1", "select": "*"},
-            ),
-            timeout=settings.DB_TIMEOUT,
+        response = await client.get(
+            _rest_url("stats"),
+            params={"id": "eq.1", "select": "*"},
         )
         if response.status_code == 200:
             data = response.json()
@@ -276,12 +249,9 @@ async def get_dynamic_rules() -> List[Dict]:
     if not client:
         return []
     try:
-        response = await asyncio.wait_for(
-            client.get(
-                _rest_url("dynamic_rules"),
-                params={"select": "*"},
-            ),
-            timeout=settings.DB_TIMEOUT,
+        response = await client.get(
+            _rest_url("dynamic_rules"),
+            params={"select": "*"},
         )
         if response.status_code == 200:
             return response.json()
@@ -296,12 +266,9 @@ async def get_battle_state() -> Optional[Dict]:
     if not client:
         return None
     try:
-        response = await asyncio.wait_for(
-            client.get(
-                _rest_url("battle_state"),
-                params={"id": "eq.1", "select": "*"},
-            ),
-            timeout=settings.DB_TIMEOUT,
+        response = await client.get(
+            _rest_url("battle_state"),
+            params={"id": "eq.1", "select": "*"},
         )
         if response.status_code == 200:
             data = response.json()
@@ -319,16 +286,13 @@ async def get_campaigns(limit: int = 10) -> List[Dict]:
     if not client:
         return []
     try:
-        response = await asyncio.wait_for(
-            client.get(
-                _rest_url("campaigns"),
-                params={
-                    "select": "*",
-                    "order": "last_seen.desc",
-                    "limit": str(limit),
-                },
-            ),
-            timeout=settings.DB_TIMEOUT,
+        response = await client.get(
+            _rest_url("campaigns"),
+            params={
+                "select": "*",
+                "order": "last_seen.desc",
+                "limit": str(limit),
+            },
         )
         if response.status_code == 200:
             return response.json()
@@ -344,16 +308,13 @@ async def get_xai_decisions(limit: int = 10) -> List[Dict]:
     if not client:
         return []
     try:
-        response = await asyncio.wait_for(
-            client.get(
-                _rest_url("xai_decisions"),
-                params={
-                    "select": "*",
-                    "order": "created_at.desc",
-                    "limit": str(limit),
-                },
-            ),
-            timeout=settings.DB_TIMEOUT,
+        response = await client.get(
+            _rest_url("xai_decisions"),
+            params={
+                "select": "*",
+                "order": "created_at.desc",
+                "limit": str(limit),
+            },
         )
         if response.status_code == 200:
             return response.json()
@@ -381,12 +342,9 @@ async def check_connection() -> bool:
     if not client:
         return False
     try:
-        response = await asyncio.wait_for(
-            client.get(
-                _rest_url("stats"),
-                params={"id": "eq.1", "select": "id"},
-            ),
-            timeout=settings.DB_TIMEOUT,
+        response = await client.get(
+            _rest_url("stats"),
+            params={"id": "eq.1", "select": "id"},
         )
         return response.status_code == 200 and bool(response.json())
     except Exception:

@@ -1,5 +1,10 @@
 import asyncio
 import threading
+
+# ── Shared Gemini global-state lock ──────────────────────────────────
+# genai.configure() mutates global state. All callers (LLMWrapper, RedAgent,
+# BlueAgent, MutationEngine) MUST hold this lock before configure() + generate.
+gemini_lock = threading.Lock()
 import time
 import hashlib
 from dataclasses import dataclass, field
@@ -77,7 +82,6 @@ class LLMWrapper:
 
     def __init__(self):
         self._openai_client: Optional[AsyncOpenAI] = None
-        self._gemini_lock = threading.Lock()
 
     async def generate(
         self,
@@ -171,7 +175,7 @@ class LLMWrapper:
         """
         try:
             def _call():
-                with self._gemini_lock:
+                with gemini_lock:
                     genai.configure(api_key=api_key)  # type: ignore
                     model = genai.GenerativeModel(  # type: ignore
                         model_name="gemini-2.0-flash",

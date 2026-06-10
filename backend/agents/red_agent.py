@@ -3,6 +3,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any
 from utils.logger import logger
+from utils.llm import gemini_lock
 from config import settings
 
 
@@ -226,17 +227,18 @@ class RedAgent:
             system_prompt = _TIER_SYSTEM_PROMPTS[tier]
 
             def _call() -> str:
-                genai.configure(api_key=settings.GEMINI_API_KEY)  # type: ignore
-                model = genai.GenerativeModel(  # type: ignore
-                    model_name="gemini-2.0-flash",
-                    system_instruction=system_prompt,
-                    generation_config=genai.GenerationConfig(  # type: ignore
-                        temperature=0.95,
-                        max_output_tokens=512,
+                with gemini_lock:
+                    genai.configure(api_key=settings.GEMINI_API_KEY)  # type: ignore
+                    model = genai.GenerativeModel(  # type: ignore
+                        model_name="gemini-2.0-flash",
+                        system_instruction=system_prompt,
+                        generation_config=genai.GenerationConfig(  # type: ignore
+                            temperature=0.95,
+                            max_output_tokens=512,
+                        )
                     )
-                )
-                response = model.generate_content(user_prompt)
-                return response.text
+                    response = model.generate_content(user_prompt)
+                    return response.text
 
             loop = asyncio.get_running_loop()
             text = await asyncio.wait_for(

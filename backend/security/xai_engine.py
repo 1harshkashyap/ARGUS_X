@@ -84,7 +84,9 @@ class XAIEngine:
 
             # Enforce exactly 3 (belt-and-suspenders)
             layers = [layer1, layer2, layer3]
-            assert len(layers) == 3
+            if len(layers) != 3:
+                logger.error(f"XAI layer count mismatch: {len(layers)} — using safe default")
+                return self._safe_default()
 
             # ── Derive high-level fields ──────────────────────────
             action        = self._action(firewall_result, fingerprint_result, session_level, combined_blocked)

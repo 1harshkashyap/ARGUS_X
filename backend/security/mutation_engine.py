@@ -4,6 +4,7 @@ import time
 from typing import List, Optional
 from utils.logger import logger
 from utils.db import add_dynamic_rule
+from utils.llm import gemini_lock
 from config import settings
 
 
@@ -285,16 +286,17 @@ Output ONLY the 15 variants, one per line, numbered 1-15.
 No explanations. No headers. Just the numbered list."""
 
             def _call():
-                genai.configure(api_key=settings.GEMINI_API_KEY)  # type: ignore
-                model = genai.GenerativeModel(  # type: ignore
-                    model_name="gemini-2.0-flash",
-                    generation_config=genai.GenerationConfig(  # type: ignore
-                        temperature=0.9,
-                        max_output_tokens=1024,
+                with gemini_lock:
+                    genai.configure(api_key=settings.GEMINI_API_KEY)  # type: ignore
+                    model = genai.GenerativeModel(  # type: ignore
+                        model_name="gemini-2.0-flash",
+                        generation_config=genai.GenerationConfig(  # type: ignore
+                            temperature=0.9,
+                            max_output_tokens=1024,
+                        )
                     )
-                )
-                response = model.generate_content(prompt)
-                return response.text
+                    response = model.generate_content(prompt)
+                    return response.text
 
             loop = asyncio.get_running_loop()
             raw_text = await asyncio.wait_for(

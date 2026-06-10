@@ -1,4 +1,3 @@
-import time
 from fastapi import APIRouter, Depends
 from utils.logger import logger
 from utils.db import get_battle_state

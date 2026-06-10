@@ -46,9 +46,4 @@ backend/models/*.txt
 logs/
 
 # Verification / test scripts — local only, never commit
-backend/verify_day2.py
-backend/verify_day3.py
-backend/verify_s1_d3.py
-backend/verify_s2_d3.py
-backend/verify_s4_d3.py
 backend/verify_*.py
