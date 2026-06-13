@@ -26,8 +26,19 @@ async def require_dashboard_key(request: Request) -> None:
       /agents/resume, /agents/cycle
 
     Returns None on success.
+    Raises HTTP 503 if DASHBOARD_READ_KEY is not configured.
     Raises HTTP 401 on missing or invalid key.
     """
+    # Fail-closed: if the operator hasn't set a key, lock everything out
+    if not settings.DASHBOARD_READ_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "DASHBOARD_NOT_CONFIGURED",
+                "message": "Dashboard key not configured. Set DASHBOARD_READ_KEY env var."
+            }
+        )
+
     key = request.headers.get("X-Dashboard-Key", "")
 
     if not key:
