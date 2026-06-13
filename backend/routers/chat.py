@@ -234,10 +234,13 @@ async def _log_to_db(request: ChatRequest, response: ChatResponse):
     Never crashes the main request on failure.
     """
     try:
+        # Strip null bytes — PostgreSQL TEXT cannot store \x00
+        safe_preview = request.message[:100].replace("\x00", "")
+
         event = {
             "session_id": request.session_id,
             "user_id": request.user_id or "",
-            "message_preview": request.message[:100],
+            "message_preview": safe_preview,
             "blocked": response.blocked,
             "threat_type": str(response.threat_type),
             "threat_score": response.threat_score,
@@ -246,19 +249,23 @@ async def _log_to_db(request: ChatRequest, response: ChatResponse):
             "llm_mode": response.llm_mode,
             "latency_ms": response.latency_ms
         }
-        await log_event(event)
+        event_id = await log_event(event)
 
         if response.blocked:
-            await log_xai_decision({
+            xai_decision = {
                 "session_id": request.session_id,
-                "message_preview": request.message[:100],
+                "message_preview": safe_preview,
                 "verdict": str(response.threat_type),
                 "primary_reason": response.explanation.primary_reason,
                 "pattern_family": response.explanation.pattern_family,
                 "sophistication_label": response.explanation.sophistication_label,
                 "layer_decisions": [ld.model_dump() for ld in response.explanation.layer_decisions],
                 "recommended_action": response.explanation.recommended_action
-            })
+            }
+            # Link XAI decision to its parent event (BUG-002 fix)
+            if event_id:
+                xai_decision["event_id"] = event_id
+            await log_xai_decision(xai_decision)
 
         # Update running stats
         increments = {"total_events": 1}

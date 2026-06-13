@@ -225,7 +225,12 @@ async def rate_limit_middleware(request: Request, call_next):
 
 @app.middleware("http")
 async def body_size_limit(request: Request, call_next):
-    """Reject oversized request bodies BEFORE reading them into memory."""
+    """Reject oversized request bodies — checks BOTH header AND actual stream.
+
+    Defends against chunked-encoding bypass where Content-Length is absent.
+    Wraps the receive channel to count bytes as they arrive.
+    """
+    # ── Fast path: reject via Content-Length header if present ────
     content_length = request.headers.get("content-length")
     if content_length:
         try:
@@ -240,6 +245,40 @@ async def body_size_limit(request: Request, call_next):
                 status_code=413,
                 content={"error": "PAYLOAD_TOO_LARGE", "message": f"Request body exceeds {_MAX_BODY_BYTES} bytes."}
             )
+
+    # ── Stream guard: wrap receive to count actual bytes ──────────
+    # Catches chunked-encoding payloads that have no Content-Length.
+    bytes_received = 0
+    body_too_large = False
+    original_receive = request._receive  # type: ignore[attr-defined]
+
+    async def _guarded_receive():
+        nonlocal bytes_received, body_too_large
+        message = await original_receive()
+        if message.get("type") == "http.request":
+            chunk = message.get("body", b"")
+            bytes_received += len(chunk)
+            if bytes_received > _MAX_BODY_BYTES:
+                body_too_large = True
+                # Replace body with empty to stop further processing
+                message["body"] = b""
+                message["more_body"] = False
+        return message
+
+    request._receive = _guarded_receive  # type: ignore[attr-defined]
+
+    if request.method in ("POST", "PUT", "PATCH"):
+        # Force body read through the guarded channel
+        try:
+            body = await request.body()
+        except Exception:
+            pass
+        if body_too_large:
+            return JSONResponse(
+                status_code=413,
+                content={"error": "PAYLOAD_TOO_LARGE", "message": f"Request body exceeds {_MAX_BODY_BYTES} bytes."}
+            )
+
     return await call_next(request)
 
 

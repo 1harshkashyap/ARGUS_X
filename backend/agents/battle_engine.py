@@ -156,14 +156,16 @@ class BattleEngine:
             tier=self.red_tier,
             context=context
         )
-        self.red_attacks += 1
-        self.last_attack = attack.payload[:_PREVIEW_LEN]
 
         if not attack.payload:
             logger.warning("BattleEngine: Red Agent returned empty payload — skipping tick")
             self.last_result = "SKIPPED"
             await self._push_state()
             return
+
+        # Count only after confirming a real payload was generated
+        self.red_attacks += 1
+        self.last_attack = attack.payload[:_PREVIEW_LEN]
 
         # ── Firewall checks attack ────────────────────────────────────
         firewall_result = await firewall.analyze(

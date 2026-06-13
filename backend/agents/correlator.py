@@ -1,6 +1,7 @@
 import asyncio
 import time
 import hashlib
+from datetime import datetime, timezone
 from typing import Dict, Set, List, Optional
 from utils.logger import logger
 from utils.db import add_campaign
@@ -104,24 +105,33 @@ class ThreatCorrelator:
             # ── Check campaign threshold ──────────────────────────
             if len(sessions) >= _CAMPAIGN_THRESHOLD:
                 campaign_id = self._campaign_id(pattern_family)
+                now_iso = datetime.now(timezone.utc).isoformat()
 
-                # Only alert once per unique campaign
-                if campaign_id not in self._alerted_campaigns:
+                is_new = campaign_id not in self._alerted_campaigns
+                if is_new:
                     self._alerted_campaigns.add(campaign_id)
-                    campaign: Dict = {
-                        "campaign_id":     campaign_id,
-                        "attack_pattern":  pattern_family,
-                        "source_sessions": list(sessions)[:20],
-                        "hit_count":       len(sessions),
-                        "severity":        self._severity(len(sessions)),
-                    }
+
+                # Always build campaign dict with current counts + timestamp
+                campaign: Dict = {
+                    "campaign_id":     campaign_id,
+                    "attack_pattern":  pattern_family,
+                    "source_sessions": list(sessions)[:20],
+                    "hit_count":       len(sessions),
+                    "severity":        self._severity(len(sessions)),
+                    "last_seen":       now_iso,
+                }
+
+                if is_new:
+                    campaign["first_seen"] = now_iso
                     logger.warning(
                         f"Correlator: CAMPAIGN DETECTED "
                         f"pattern={pattern_family} "
                         f"sessions={len(sessions)} "
                         f"id={campaign_id}"
                     )
-                    return campaign
+
+                # Return campaign for DB upsert (updates last_seen + hit_count)
+                return campaign
 
             # ── Periodic cleanup ──────────────────────────────────
             if self._event_count % 100 == 0:

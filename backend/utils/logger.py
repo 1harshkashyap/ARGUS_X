@@ -23,9 +23,15 @@ def redact_keys(message: str) -> str:
 
 
 class RedactingFormatter(logging.Formatter):
-    """Custom formatter that redacts sensitive values from all log output."""
+    """Custom formatter that redacts sensitive values from all log output.
+
+    Works on a copy of the LogRecord so multiple handlers each see
+    the original message (prevents double-redaction or data loss).
+    """
 
     def format(self, record: logging.LogRecord) -> str:
+        import copy
+        record = copy.copy(record)
         # Redact the message
         record.msg = redact_keys(str(record.msg))
         # Redact any args passed to the logger

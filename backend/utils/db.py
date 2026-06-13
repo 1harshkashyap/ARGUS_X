@@ -55,20 +55,25 @@ async def _get_http_client() -> Optional[httpx.AsyncClient]:
 
 # ── Write operations ──────────────────────────────────────────────────
 
-async def log_event(event: Dict[str, Any]) -> bool:
-    """Log a security event. Non-fatal — returns False on failure."""
+async def log_event(event: Dict[str, Any]) -> Optional[str]:
+    """Log a security event. Returns inserted event UUID on success, None on failure."""
     client = await _get_http_client()
     if not client:
-        return False
+        return None
     try:
         response = await client.post(_rest_url("events"), json=event)
-        return response.status_code in (200, 201)
+        if response.status_code in (200, 201):
+            data = response.json()
+            if data and isinstance(data, list) and len(data) > 0:
+                return data[0].get("id")
+            return ""  # Inserted but couldn't extract UUID
+        return None
     except httpx.TimeoutException:
         logger.warning(f"log_event timed out after {settings.DB_TIMEOUT}s")
-        return False
+        return None
     except Exception as e:
         logger.warning(f"log_event failed: {type(e).__name__}: {str(e)[:100]}")
-        return False
+        return None
 
 
 async def log_xai_decision(decision: Dict[str, Any]) -> bool:

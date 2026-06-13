@@ -6,7 +6,7 @@ from typing import Optional, List
 from utils.logger import logger
 from utils.db import add_dynamic_rule
 from utils.llm import gemini_lock
-from security.mutation_engine import _validate_pattern, _is_redos_safe
+from security.mutation_engine import _validate_pattern
 from config import settings
 
 
