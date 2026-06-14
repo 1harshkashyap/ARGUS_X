@@ -45,5 +45,8 @@ backend/models/*.txt
 *.log
 logs/
 
+# Pytest cache
+.pytest_cache/
+
 # Verification / test scripts — local only, never commit
 backend/verify_*.py
