@@ -62,7 +62,7 @@ class ArgusApp(App):
     # ── Startup ───────────────────────────────────────────────────────
 
     def on_mount(self) -> None:
-        if _ENV_GEMINI_KEY and len(_ENV_GEMINI_KEY) > 30:
+        if _ENV_GEMINI_KEY and len(_ENV_GEMINI_KEY) > 20:
             self._api_key = _ENV_GEMINI_KEY
             self._post_key_setup()
         else:

@@ -63,7 +63,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
         if key_type == "UNKNOWN":
             return ChatResponse(
-                response="Invalid API key format. Gemini keys start with 'AI', OpenAI keys start with 'sk-'.",
+                response="Invalid API key format. Gemini keys start with 'AI' or 'AQ.', OpenAI keys start with 'sk-'.",
                 blocked=False,
                 error="INVALID_API_KEY",
                 session_id=request.session_id,

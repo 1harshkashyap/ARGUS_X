@@ -26,7 +26,8 @@ def detect_key_type(api_key: Optional[str]) -> str:
     if not api_key or not api_key.strip():
         return "NONE"
     key = api_key.strip()
-    if key.startswith("AI") and len(key) > 30:
+    # Google Gemini keys: old format AIza... (39 chars), new format AQ.Ab... (53 chars)
+    if (key.startswith("AI") or key.startswith("AQ.")) and len(key) > 20:
         return "GEMINI"
     if key.startswith("sk-") and len(key) > 40:
         return "OPENAI"

@@ -77,7 +77,7 @@ class KeyGateScreen(Screen[str]):
                         id="gate-subtitle",
                     )
                     yield Input(
-                        placeholder="AIzaSy...",
+                        placeholder="AQ.Ab... or AIzaSy...",
                         password=True,
                         id="key-input",
                     )
@@ -108,9 +108,10 @@ class KeyGateScreen(Screen[str]):
             error_label.update("Please enter your API key")
             return
 
-        if not (key.startswith("AI") and len(key) > 30):
+        # Accept both old format (AIza...) and new format (AQ.Ab...)
+        if len(key) < 20:
             error_label.update(
-                "Invalid format — Gemini keys start with 'AI' and are 35+ chars"
+                "Invalid format — key is too short (expected 20+ characters)"
             )
             return
 
