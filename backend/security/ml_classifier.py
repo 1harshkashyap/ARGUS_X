@@ -1,12 +1,12 @@
 """
 ARGUS-X ML Security Classifier
 
-ONNX-based DistilBERT classifier for threat detection.
+ONNX-based classifier for prompt injection detection.
 CPU only. No PyTorch. No transformers. Uses tokenizers library directly.
 
-Model: DistilBERT fine-tuned on SST-2 (sentiment analysis)
-Strategy: Negative sentiment correlates with attack intent.
-          NEGATIVE class probability = threat probability.
+Model: ProtectAI DeBERTa v3 (purpose-built prompt injection classifier)
+Strategy: INJECTION class probability = threat probability.
+          Class 0 = SAFE, Class 1 = INJECTION.
 
 Security guarantees:
   - Never raises to caller
@@ -48,7 +48,7 @@ class MLResult:
 
 # ── Constants ─────────────────────────────────────────────────────────
 
-# Maximum tokens to pass to model (DistilBERT max = 512)
+# Maximum tokens to pass to model (DeBERTa v3 max = 512)
 _MAX_TOKENS = 512
 
 # Maximum input string length before truncation (defense against huge payloads)
@@ -73,19 +73,19 @@ class MLClassifier:
     """
     ONNX-based ML security classifier.
 
-    Uses quantized DistilBERT (fine-tuned on SST-2) as a proxy for
-    threat detection. Negative sentiment correlates with attack intent.
+    Uses ProtectAI DeBERTa v3 (purpose-built prompt injection classifier)
+    for threat detection.
 
-    Model inputs  (standard BERT format):
+    Model inputs  (DeBERTa v3 format):
       input_ids:       [1, seq_len] int64
       attention_mask:  [1, seq_len] int64
 
     Model outputs:
       logits: [1, 2] float32
-        logits[0][0] = NEGATIVE (malicious) score
-        logits[0][1] = POSITIVE (benign) score
+        logits[0][0] = SAFE score
+        logits[0][1] = INJECTION (malicious) score
 
-    Threat probability = softmax(logits)[0]  (NEGATIVE class probability)
+    Threat probability = softmax(logits)[1]  (INJECTION class probability)
 
     Security properties:
       - CPU only (CPUExecutionProvider — no CUDA dependency)
@@ -128,7 +128,7 @@ class MLClassifier:
         if not model_path.exists():
             logger.warning(
                 f"MLClassifier: model not found at {model_path} — "
-                f"run: python scripts/download_model.py"
+                f"run: python scripts/export_model.py"
             )
             return
 
@@ -156,7 +156,7 @@ class MLClassifier:
             )
             self._model_path = model_path
             logger.info(
-                f"MLClassifier: ONNX session loaded from {model_path.name}"
+                f"MLClassifier: ProtectAI DeBERTa loaded from {model_path.name}"
             )
         except Exception as e:
             logger.warning(
@@ -176,6 +176,11 @@ class MLClassifier:
                 pad_token="[PAD]",
                 length=None,  # Dynamic padding — no fixed length
             )
+
+            # Validate tokenizer produces non-empty encodings
+            _test_enc = self._tokenizer.encode("test")
+            assert len(_test_enc.ids) > 0, "Tokenizer produced empty encoding"
+
             logger.info("MLClassifier: tokenizer loaded")
         except Exception as e:
             logger.warning(
@@ -188,7 +193,7 @@ class MLClassifier:
 
         self.available = True
         logger.info(
-            f"MLClassifier: online "
+            f"MLClassifier: online — prompt injection classifier active "
             f"(threshold={settings.FIREWALL_ML_THRESHOLD})"
         )
 
@@ -256,14 +261,14 @@ class MLClassifier:
 
             # Run inference
             outputs = self._session.run(None, feed)
-            logits = outputs[0][0].tolist()  # [neg_score, pos_score]
+            logits = outputs[0][0].tolist()  # [safe_score, injection_score]
 
             # Softmax → probabilities
             probs = _softmax(logits)
 
-            # Threat probability = NEGATIVE class (index 0)
-            # DistilBERT SST-2: label 0 = NEGATIVE, label 1 = POSITIVE
-            threat_prob = float(probs[0])
+            # Threat probability = INJECTION class (index 1)
+            # ProtectAI DeBERTa v3: label 0 = SAFE, label 1 = INJECTION
+            threat_prob = float(probs[1])
             threshold = settings.FIREWALL_ML_THRESHOLD
 
             elapsed = round((time.monotonic() - start) * 1000, 2)
