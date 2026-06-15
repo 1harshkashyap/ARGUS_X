@@ -1,74 +1,98 @@
-"""XAI Analysis panel — shows full breakdown of selected event."""
+"""XAI Analysis panel — pipeline visual with auto-show last blocked event."""
 from __future__ import annotations
 from textual.app import ComposeResult
 from textual.widget import Widget
-from textual.widgets import Static, Label
+from textual.widgets import Static
 from textual.containers import Vertical
 
+# ── Design system colors ──────────────────────────────────────────────
+_FG_PRI  = "#e4e4e7"
+_FG_SEC  = "#71717a"
+_FG_DIM  = "#3f3f46"
+_BORDER  = "#27272a"
+_ACCENT  = "#3b82f6"
+_THREAT  = "#ef4444"
+_CLEAN   = "#22c55e"
+_WARNING = "#f59e0b"
+_MUTATION = "#a78bfa"
+_CRITICAL = "#dc2626"
 
 _ACTION_COLORS = {
-    "ALLOW":                 "#22c55e",
-    "ALLOW_WITH_MONITORING": "#22c55e",
-    "BLOCK":                 "#ef4444",
-    "BLOCK_AND_MONITOR":     "#f59e0b",
-    "ESCALATE_MONITORING":   "#f59e0b",
-    "TERMINATE_SESSION":     "#ef4444",
+    "ALLOW":                 _FG_DIM,
+    "ALLOW_WITH_MONITORING": _ACCENT,
+    "BLOCK":                 _WARNING,
+    "BLOCK_AND_MONITOR":     _WARNING,
+    "ESCALATE_MONITORING":   _THREAT,
+    "TERMINATE_SESSION":     _CRITICAL,
 }
 
 _LEVEL_COLORS = {
-    "NAIVE":        "#64748b",
-    "ELEMENTARY":   "#3b82f6",
-    "INTERMEDIATE": "#f59e0b",
-    "ADVANCED":     "#ef4444",
-    "APEX":         "#a78bfa",
+    "NAIVE":        _FG_SEC,
+    "ELEMENTARY":   _ACCENT,
+    "INTERMEDIATE": _WARNING,
+    "ADVANCED":     _THREAT,
+    "APEX":         _MUTATION,
 }
 
 
-def _confidence_bar(value: float, width: int = 14) -> str:
+def _confidence_bar(value: float, width: int = 16) -> str:
+    """Confidence bar with threshold marker at position 14 (~0.87)."""
     filled = round(value * width)
     empty  = width - filled
-    color  = "#ef4444" if value > 0.8 else \
-             "#f59e0b" if value > 0.4 else \
-             "#3b82f6"
-    return f"[{color}]{'█' * filled}[/][#27272a]{'░' * empty}[/] [{color}]{value:.0%}[/]"
+    color  = _THREAT if value > 0.8 else \
+             _WARNING if value > 0.4 else _ACCENT
+    # Build bar with threshold marker
+    bar_chars = []
+    threshold_pos = round(0.87 * width)
+    for i in range(width):
+        if i < filled:
+            bar_chars.append(f"[{color}]█[/]")
+        elif i == threshold_pos:
+            bar_chars.append(f"[{_FG_SEC}]┊[/]")
+        else:
+            bar_chars.append(f"[{_BORDER}]░[/]")
+    return "".join(bar_chars) + f" [{color}]{value:.0%}[/]"
 
 
 class XAIPanelWidget(Widget):
-    BORDER_TITLE = "XAI ANALYSIS"
+    """XAI Analysis — pipeline visual with 3-layer stack connected by box-drawing chars."""
+
     DEFAULT_CSS = """
     XAIPanelWidget {
-        border: solid #27272a;
-        background: #18181b;
-        width: 38%;
-        padding: 1 2;
+        width: 42%;
+        background: #141417;
+        border-left: solid #3b82f6;
+        border-right: solid #27272a;
+        padding: 0 1;
         overflow-y: auto;
     }
+    #xai-title {
+        height: 1;
+        color: #71717a;
+        text-style: bold;
+        dock: top;
+    }
     #xai-empty {
-        color: #64748b;
+        color: #3f3f46;
         text-align: center;
-        margin-top: 4;
+        margin-top: 3;
+        text-style: italic;
     }
     #xai-content { height: auto; }
-    .xai-section-title {
-        color: #64748b;
-        text-style: bold;
-        margin-top: 1;
-    }
-    .xai-row { margin-bottom: 1; }
     """
 
     def compose(self) -> ComposeResult:
+        yield Static("[bold #71717a]XAI ANALYSIS[/]", id="xai-title")
         yield Static(
-            "Select an event from the list\n\n"
-            "← Use arrow keys or click to select",
+            f"[{_FG_DIM}]Awaiting event selection...\n\n"
+            f"Select a blocked event from the feed\n"
+            f"to view the full XAI breakdown.[/]",
             id="xai-empty",
         )
         with Vertical(id="xai-content"):
-            yield Static("", id="xai-header")
-            yield Static("", id="xai-score-bar")
-            yield Static("", id="xai-layer1")
-            yield Static("", id="xai-layer2")
-            yield Static("", id="xai-layer3")
+            yield Static("", id="xai-verdict")
+            yield Static("", id="xai-soph")
+            yield Static("", id="xai-pipeline")
             yield Static("", id="xai-meta")
             yield Static("", id="xai-evolution")
 
@@ -94,86 +118,96 @@ class XAIPanelWidget(Widget):
         pattern     = explanation.get("pattern_family", "UNKNOWN")
 
         from widgets.event_list import _THREAT_STYLES
-        _, threat_color = _THREAT_STYLES.get(threat, ("??", "#64748b"))
-        label_color = _LEVEL_COLORS.get(label, "#64748b")
-        action_color = _ACTION_COLORS.get(action, "#64748b")
+        _, threat_color = _THREAT_STYLES.get(threat, ("??", _FG_SEC))
+        label_color = _LEVEL_COLORS.get(label, _FG_SEC)
+        action_color = _ACTION_COLORS.get(action, _FG_DIM)
 
-        # Header
-        status_str = "■ BLOCKED" if blocked else "○ CLEAN"
-        status_color = "#ef4444" if blocked else "#22c55e"
-        self.query_one("#xai-header", Static).update(
-            f"[{status_color}]{status_str}[/]  "
-            f"[{threat_color}]{threat.replace('_', ' ')}[/]\n"
-            f"[#64748b]Primary:[/] {primary}"
-        )
-
-        # Sophistication bar
-        # 20-char bar gives better visual weight even at score=1
-        soph_filled = soph_score * 2
-        soph_empty  = (10 - soph_score) * 2
-        soph_bar = (
-            f"[{label_color}]{'█' * soph_filled}[/]"
-            f"[#27272a]{'░' * soph_empty}[/]"
-        )
-        self.query_one("#xai-score-bar", Static).update(
-            f"\n[#64748b]SOPHISTICATION[/]  "
-            f"{soph_bar}  "
-            f"[{label_color}]{soph_score}/10  {label}[/]"
-        )
-
-        # Layer decisions
-        layer_ids = ["#xai-layer1", "#xai-layer2", "#xai-layer3"]
-        for i, lid in enumerate(layer_ids):
-            widget = self.query_one(lid, Static)
-            if i < len(layers):
-                layer   = layers[i]
-                name    = layer.get("layer_name", f"Layer {i+1}")
-                trig    = layer.get("triggered", False)
-                conf    = float(layer.get("confidence", 0.0))
-                signals = layer.get("signals") or []
-                reason  = layer.get("reasoning", "")
-
-                trig_str = (
-                    f"[[bold #ef4444]TRIGGERED[/]]" if trig
-                    else "[[#64748b]CLEAR[/]]    "
-                )
-                bar = _confidence_bar(conf)
-                sig = signals[0] if signals else ""
-
-                # Update outdated ML placeholder messages
-                if "Day 7" in sig or "pending" in sig.lower():
-                    sig = "ML disabled — set ML_ENABLED=true to activate"
-                if "Day 7" in reason or "DistilBERT" in reason:
-                    reason = "ML semantic classifier is currently disabled (ML_ENABLED=false)."
-
-                widget.update(
-                    f"\n[#3b82f6]{name}[/]  {trig_str}\n"
-                    f"  {bar}\n"
-                    f"  [#64748b]{sig[:60]}[/]"
-                )
-            else:
-                widget.update("")
-
-        # Metadata
-        meta_lines = []
-        if fp:
-            meta_lines.append(
-                f"[#64748b]FINGERPRINT[/]  [bold #e2e8f0]{fp}[/]"
+        # ── Verdict headline ──────────────────────────────────────
+        if blocked:
+            verdict = (
+                f"[{_THREAT} bold]█ BLOCKED[/]  "
+                f"[{threat_color} bold]{threat.replace('_', ' ')}[/]\n"
+                f"[{_FG_PRI} bold]{fp}[/]\n"
+                f"[{_FG_SEC}]{primary[:80]}[/]"
             )
-        meta_lines.append(
-            f"[#64748b]PATTERN    [/]  [{threat_color}]{pattern}[/]"
-        )
-        meta_lines.append(
-            f"[#64748b]ACTION     [/]  [{action_color}]{action}[/]"
-        )
-        self.query_one("#xai-meta", Static).update(
-            "\n" + "\n".join(meta_lines)
+        else:
+            verdict = (
+                f"[{_CLEAN} bold]○ CLEAN[/]  "
+                f"[{_FG_SEC}]{threat.replace('_', ' ')}[/]\n"
+                f"[{_FG_SEC}]{primary[:80]}[/]"
+            )
+        self.query_one("#xai-verdict", Static).update(verdict)
+
+        # ── Sophistication indicator ──────────────────────────────
+        # 10-position tier indicator: each position = 1 point
+        tier_chars = []
+        for i in range(10):
+            if i < soph_score:
+                tier_chars.append(f"[{label_color}]█[/]")
+            else:
+                tier_chars.append(f"[{_BORDER}]░[/]")
+        tier_bar = "".join(tier_chars)
+
+        self.query_one("#xai-soph", Static).update(
+            f"\n[{_FG_SEC}]SOPHISTICATION[/]  "
+            f"{tier_bar}  "
+            f"[{label_color} bold]{soph_score}/10 {label}[/]"
         )
 
-        # Evolution note
+        # ── Layer pipeline (connected with box-drawing) ───────────
+        pipeline_lines = []
+        for i, layer in enumerate(layers[:3]):
+            name    = layer.get("layer_name", f"Layer {i+1}")
+            trig    = layer.get("triggered", False)
+            conf    = float(layer.get("confidence", 0.0))
+            signals = layer.get("signals") or []
+            reason  = layer.get("reasoning", "")
+
+            # Pipeline connector
+            if i == 0:
+                connector = "┌"
+            elif i < min(len(layers), 3) - 1:
+                connector = "├"
+            else:
+                connector = "└"
+
+            # Triggered badge
+            if trig:
+                badge = f"[{_THREAT} bold]TRIGGERED[/]"
+            else:
+                badge = f"[{_FG_DIM}]CLEAR[/]"
+
+            bar = _confidence_bar(conf)
+            sig = signals[0] if signals else ""
+
+            # Sanitize stale ML placeholder messages
+            if "Day 7" in sig or "pending" in sig.lower():
+                sig = "ML classifier — skipped (firewall resolved)"
+            if "Day 7" in reason or "DistilBERT" in reason:
+                reason = "ML classifier was not invoked for this request."
+
+            pipeline_lines.append(
+                f"\n[{_BORDER}]{connector}── [{_ACCENT}]{name}[/]  {badge}\n"
+                f"[{_BORDER}]│[/]   {bar}\n"
+                f"[{_BORDER}]│[/]   [{_FG_SEC}]{sig[:55]}[/]"
+            )
+
+        self.query_one("#xai-pipeline", Static).update(
+            "".join(pipeline_lines)
+        )
+
+        # ── Metadata: pattern + action badge ──────────────────────
+        action_badge = f"[{action_color} bold] {action} [/]"
+        meta = (
+            f"\n[{_FG_SEC}]PATTERN[/]  [{threat_color}]{pattern}[/]\n"
+            f"[{_FG_SEC}]ACTION [/]  {action_badge}"
+        )
+        self.query_one("#xai-meta", Static).update(meta)
+
+        # ── Evolution note ────────────────────────────────────────
         if evo_note:
             self.query_one("#xai-evolution", Static).update(
-                f"\n[#a78bfa]⟳ {evo_note}[/]"
+                f"\n[{_MUTATION}]⟳ {evo_note}[/]"
             )
         else:
             self.query_one("#xai-evolution", Static).update("")

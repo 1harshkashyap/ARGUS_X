@@ -1,6 +1,6 @@
 """
-Input panel — bottom dock.
-Two tabs: Chat (HR assistant) and Red Team (attack console).
+Input panel — bottom dock, compact 14-row layout.
+Two tabs: HR ASSISTANT and ATTACK CONSOLE.
 Maintains command history. F1-F6 fire preset attacks instantly.
 """
 from __future__ import annotations
@@ -13,6 +13,15 @@ from textual.widgets import (
 from textual.containers import Horizontal
 from textual.message import Message
 
+# ── Design system colors ──────────────────────────────────────────────
+_FG_PRI  = "#e4e4e7"
+_FG_SEC  = "#71717a"
+_FG_DIM  = "#3f3f46"
+_ACCENT  = "#3b82f6"
+_THREAT  = "#ef4444"
+_CLEAN   = "#22c55e"
+_WARNING = "#f59e0b"
+_MUTATION = "#a78bfa"
 
 # ── Messages posted by InputPanel ────────────────────────────────────
 
@@ -71,22 +80,22 @@ PRESETS: dict[str, tuple[str, str]] = {
 class InputPanelWidget(Widget):
     DEFAULT_CSS = """
     InputPanelWidget {
-        height: 18;
-        border-top: solid #27272a;
-        background: #0e0e10;
+        height: 14;
+        border-top: solid #3b82f6;
+        background: #09090b;
         dock: bottom;
     }
     TabbedContent {
         height: 1fr;
-        background: #0e0e10;
+        background: #09090b;
     }
     TabPane {
-        background: #0e0e10;
+        background: #09090b;
         padding: 0;
     }
     #chat-log, #rt-log {
-        height: 9;
-        background: #18181b;
+        height: 5;
+        background: #141417;
         border: solid #27272a;
         margin: 0 1;
     }
@@ -98,30 +107,31 @@ class InputPanelWidget(Widget):
     #chat-input, #rt-input {
         width: 1fr;
         border: solid #27272a;
-        background: #18181b;
+        background: #141417;
     }
     #chat-input:focus, #rt-input:focus {
         border: solid #3b82f6;
     }
     #rt-presets {
-        height: 3;
-        margin: 0 1 0 1;
+        height: 1;
+        margin: 0 1;
         layout: horizontal;
         align: left middle;
     }
     .preset-btn {
         margin-right: 1;
-        min-width: 12;
-        background: #18181b;
-        border: solid #27272a;
-        color: #64748b;
+        min-width: 10;
+        background: #141417;
+        border: none;
+        color: #71717a;
+        height: 1;
     }
     .preset-btn:hover {
-        background: #27272a;
-        color: #f2f2f2;
+        background: #1e293b;
+        color: #e4e4e7;
     }
     #status-label {
-        color: #64748b;
+        color: #71717a;
         height: 1;
         padding: 0 2;
     }
@@ -140,14 +150,14 @@ class InputPanelWidget(Widget):
 
     def compose(self) -> ComposeResult:
         with TabbedContent(id="input-tabs", initial="chat"):
-            with TabPane("Chat", id="chat"):
+            with TabPane("HR Assistant", id="chat"):
                 yield RichLog(id="chat-log", highlight=True, markup=True, wrap=True)
                 with Horizontal(classes="input-row"):
                     yield Input(
-                        placeholder="Ask the HR assistant anything...",
+                        placeholder="Ask about leave, payroll, policies...",
                         id="chat-input",
                     )
-            with TabPane("Red Team", id="redteam"):
+            with TabPane("Attack Console", id="redteam"):
                 yield RichLog(id="rt-log", highlight=True, markup=True, wrap=True)
                 with Horizontal(id="rt-presets"):
                     for label in PRESETS:
@@ -158,7 +168,7 @@ class InputPanelWidget(Widget):
                         )
                 with Horizontal(classes="input-row"):
                     yield Input(
-                        placeholder="Custom attack payload — press Enter to fire...",
+                        placeholder="Custom attack payload — Enter to fire",
                         id="rt-input",
                     )
         yield Label("Ready", id="status-label")
@@ -166,14 +176,17 @@ class InputPanelWidget(Widget):
     def on_mount(self) -> None:
         chat_log = self.query_one("#chat-log", RichLog)
         chat_log.write(
-            "[#64748b]HR Assistant ready. Ask about leave, payroll, policies.[/]"
+            f"[{_FG_SEC}]HR Assistant ready. Ask about leave, payroll, policies.[/]"
         )
         rt_log = self.query_one("#rt-log", RichLog)
         rt_log.write(
-            "[#64748b]Red Team console. Press F1-F6 for presets or type custom payload.[/]\n"
-            "[#64748b]F1[/] Inject  [#64748b]F2[/] Jailbreak  "
-            "[#64748b]F3[/] Exfil  [#64748b]F4[/] Role  "
-            "[#64748b]F5[/] Indirect  [#64748b]F6[/] APEX"
+            f"[{_FG_SEC}]Attack Console ready.[/]  "
+            f"[{_FG_DIM}]F1[/] PI  "
+            f"[{_FG_DIM}]F2[/] JB  "
+            f"[{_FG_DIM}]F3[/] DE  "
+            f"[{_FG_DIM}]F4[/] RH  "
+            f"[{_FG_DIM}]F5[/] II  "
+            f"[{_FG_DIM}]F6[/] APEX"
         )
 
     # ── Chat tab ──────────────────────────────────────────────────────
@@ -190,7 +203,7 @@ class InputPanelWidget(Widget):
             return
         self._add_history(text)
         chat_log = self.query_one("#chat-log", RichLog)
-        chat_log.write(f"[bold #3b82f6]You[/]  {text}")
+        chat_log.write(f"[{_ACCENT} bold]You[/]  {text}")
         self.query_one("#chat-input", Input).clear()
         self._set_status("Analyzing...")
         self.post_message(ChatRequest(text, self._session_id, self.api_key))
@@ -205,14 +218,14 @@ class InputPanelWidget(Widget):
         if blocked:
             action = data.get("explanation", {}).get("recommended_action", "BLOCK")
             chat_log.write(
-                f"[bold #ef4444]BLOCKED[/]  "
-                f"[#64748b]{threat.replace('_', ' ')}  "
+                f"[{_THREAT} bold]█ BLOCKED[/]  "
+                f"[{_FG_SEC}]{threat.replace('_', ' ')}  "
                 f"{latency:.0f}ms  {action}[/]"
             )
         else:
             chat_log.write(
-                f"[bold #22c55e]ARGUS-X[/]  {response[:400]}\n"
-                f"[#64748b]          {latency:.0f}ms[/]"
+                f"[{_CLEAN} bold]ARGUS-X[/]  {response[:400]}\n"
+                f"[{_FG_SEC}]          {latency:.0f}ms[/]"
             )
         self._set_status("Ready")
 
@@ -238,8 +251,8 @@ class InputPanelWidget(Widget):
     def _execute_attack(self, payload: str, label: str) -> None:
         rt_log = self.query_one("#rt-log", RichLog)
         rt_log.write(
-            f"\n[bold #a78bfa]► {label}[/]\n"
-            f"[#64748b]{payload[:80]}{'…' if len(payload) > 80 else ''}[/]"
+            f"\n[{_MUTATION} bold]► {label}[/]\n"
+            f"[{_FG_DIM}]{payload[:80]}{'…' if len(payload) > 80 else ''}[/]"
         )
         self._set_status(f"Firing {label}...")
         self.post_message(ChatRequest(payload, self._session_id, self.api_key))
@@ -256,20 +269,21 @@ class InputPanelWidget(Widget):
         latency  = data.get("latency_ms", 0)
 
         if blocked:
+            # Outcome first line — most important info
             rt_log.write(
-                f"[bold #22c55e]✓ BLOCKED[/]  "
-                f"[#ef4444]{threat.replace('_', ' ')}[/]  "
-                f"[#64748b]score={score:.2f}  "
-                f"soph={soph}/10 {label}  "
-                f"fp={fp[:8]}  "
-                f"action={action}  "
+                f"[{_CLEAN} bold]✓ BLOCKED[/]  "
+                f"[{_THREAT}]{threat.replace('_', ' ')}[/]  "
+                f"[{_FG_SEC}]{score:.2f}  "
+                f"{soph}/10 {label}  "
+                f"{fp[:8]}  "
+                f"{action}  "
                 f"{latency:.0f}ms[/]"
             )
         else:
             rt_log.write(
-                f"[bold #ef4444]✗ BYPASSED[/]  "
-                f"[#64748b]{threat}  {latency:.0f}ms[/]\n"
-                f"[#ef4444]  ↳ This attack evaded detection![/]"
+                f"[{_THREAT} bold]✗ BYPASSED[/]  "
+                f"[{_FG_SEC}]{threat}  {latency:.0f}ms[/]\n"
+                f"[{_THREAT}]  ↳ This attack evaded detection![/]"
             )
         self._set_status("Ready")
 
@@ -311,7 +325,7 @@ class InputPanelWidget(Widget):
             pass
 
     def _set_status(self, msg: str) -> None:
-        self.query_one("#status-label", Label).update(f"[#64748b]{msg}[/]")
+        self.query_one("#status-label", Label).update(f"[{_FG_SEC}]{msg}[/]")
         self._busy = msg != "Ready"
 
     def set_busy(self, busy: bool) -> None:

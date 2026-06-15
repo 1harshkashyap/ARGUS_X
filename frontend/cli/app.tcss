@@ -1,26 +1,46 @@
-/* ARGUS-X TUI — Design System */
-/* "Clean Intelligence" — precise, data-first, no decoration */
+/* ═══════════════════════════════════════════════════════════════════
+   ARGUS-X TUI — Design System v2.0
+   SOC Command Center Aesthetic
+   ═══════════════════════════════════════════════════════════════════
+
+   COLOR SYSTEM (9 structural + 5 status):
+     VOID       #09090b    Deepest bg — screen, input area
+     SURFACE    #141417    Panel bg — where live data lives
+     ELEVATED   #1e293b    Selection, focused state
+     BORDER     #27272a    All structural lines
+     FG_PRIMARY #e4e4e7    Data values, max readability
+     FG_SECOND  #71717a    Labels, metadata, timestamps
+     FG_DIM     #3f3f46    Disabled, hints
+     ACCENT     #3b82f6    Logo, focus, active selection
+     THREAT     #ef4444    BLOCKED/CRITICAL — instant attention
+
+     S_BLOCKED  #ef4444    S_CLEAN    #22c55e
+     S_WARNING  #f59e0b    S_MUTATION #a78bfa
+     S_CRITICAL #dc2626
+   ═══════════════════════════════════════════════════════════════════ */
 
 /* ── Global ───────────────────────────────────────────────────────── */
 
 Screen {
-    background: #0e0e10;
-    color: #f2f2f2;
+    background: #09090b;
+    color: #e4e4e7;
 }
 
 /* ── Stats Bar ────────────────────────────────────────────────────── */
 
 StatsBar {
-    height: 3;
-    background: #18181b;
+    height: 2;
+    background: #141417;
     border-bottom: solid #27272a;
     padding: 0 1;
     layout: vertical;
-    align: left middle;
+    content-align: left middle;
 }
 
-#sb-line1 { height: 1; }
-#sb-line2 { height: 1; color: #64748b; }
+#sb-line {
+    height: 1;
+    width: 1fr;
+}
 
 /* ── Main 3-column layout ─────────────────────────────────────────── */
 
@@ -29,124 +49,152 @@ StatsBar {
     layout: horizontal;
 }
 
-/* ── Event List ───────────────────────────────────────────────────── */
+/* ── Event List (left column) ─────────────────────────────────────── */
 
 EventListWidget {
-    width: 32%;
-    border: solid #27272a;
-    background: #18181b;
-    border-title-color: #64748b;
-    border-title-style: bold;
-    border-title-align: left;
+    width: 28%;
+    background: #141417;
+    border-right: solid #27272a;
+    padding: 0;
+}
+
+#ev-header {
+    height: 1;
+    background: #141417;
+    color: #71717a;
+    padding: 0 1;
+    text-style: bold;
+    dock: top;
 }
 
 EventListWidget DataTable {
-    background: #18181b;
+    background: #141417;
     height: 1fr;
 }
 
 EventListWidget DataTable > .datatable--cursor {
     background: #1e293b;
-    color: #f2f2f2;
+    color: #e4e4e7;
 }
 
 EventListWidget DataTable > .datatable--hover {
-    background: #1e293b;
+    background: #1a1a2e;
+}
+
+EventListWidget DataTable > .datatable--header {
+    background: #141417;
+    color: #71717a;
+    text-style: bold;
 }
 
 #ev-count {
     height: 1;
-    background: #0e0e10;
-    color: #64748b;
+    background: #09090b;
+    color: #71717a;
     padding: 0 1;
     dock: bottom;
 }
 
-/* ── XAI Panel ────────────────────────────────────────────────────── */
+/* ── XAI Panel (center — primary focus) ───────────────────────────── */
 
 XAIPanelWidget {
-    width: 38%;
-    border: solid #27272a;
-    background: #18181b;
-    border-title-color: #64748b;
-    border-title-style: bold;
-    border-title-align: left;
+    width: 42%;
+    background: #141417;
     border-left: solid #3b82f6;
-    padding: 1 2;
+    border-right: solid #27272a;
+    padding: 0 1;
     overflow-y: auto;
+}
+
+#xai-title {
+    height: 1;
+    color: #71717a;
+    text-style: bold;
+    padding: 0 0;
+    dock: top;
 }
 
 #xai-empty {
-    color: #64748b;
+    color: #3f3f46;
     text-align: center;
-    margin-top: 4;
+    margin-top: 3;
     text-style: italic;
 }
 
-/* ── Battle Panel ─────────────────────────────────────────────────── */
+#xai-content {
+    height: auto;
+    padding: 0 0;
+}
+
+/* ── Battle Panel (right column) ──────────────────────────────────── */
 
 BattlePanelWidget {
     width: 30%;
-    border: solid #27272a;
-    background: #18181b;
-    border-title-color: #64748b;
-    border-title-style: bold;
-    border-title-align: left;
-    padding: 1 2;
+    background: #141417;
+    padding: 0 1;
     overflow-y: auto;
 }
 
-/* ── Input Panel ──────────────────────────────────────────────────── */
+#bp-title {
+    height: 1;
+    color: #71717a;
+    text-style: bold;
+    dock: top;
+}
+
+/* ── Input Panel (bottom dock — compact) ──────────────────────────── */
 
 InputPanelWidget {
-    height: 18;
+    height: 14;
     border-top: solid #3b82f6;
-    background: #0e0e10;
+    background: #09090b;
     dock: bottom;
 }
 
 TabbedContent {
     height: 1fr;
-    background: #0e0e10;
+    background: #09090b;
 }
 
 TabbedContent ContentSwitcher {
-    background: #0e0e10;
+    background: #09090b;
 }
 
 Tabs {
-    background: #18181b;
+    background: #141417;
     border-bottom: solid #27272a;
+    height: 3;
 }
 
 Tab {
-    color: #64748b;
-    background: #18181b;
+    color: #71717a;
+    background: #141417;
     padding: 0 3;
 }
 
 Tab:focus {
-    color: #f2f2f2;
-    background: #18181b;
+    color: #e4e4e7;
+    background: #141417;
 }
 
 Tab.-active {
     color: #3b82f6;
     text-style: bold;
-    background: #18181b;
+    background: #141417;
 }
 
 TabPane {
-    background: #0e0e10;
+    background: #09090b;
     padding: 0;
 }
 
 #chat-log, #rt-log {
-    height: 9;
-    background: #18181b;
+    height: 5;
+    background: #141417;
     border: solid #27272a;
     margin: 0 1;
     scrollbar-color: #27272a;
+    scrollbar-color-hover: #3f3f46;
 }
 
 .input-row {
@@ -158,8 +206,8 @@ TabPane {
 #chat-input, #rt-input {
     width: 1fr;
     border: solid #27272a;
-    background: #18181b;
-    color: #f2f2f2;
+    background: #141417;
+    color: #e4e4e7;
 }
 
 #chat-input:focus, #rt-input:focus {
@@ -167,46 +215,45 @@ TabPane {
 }
 
 #rt-presets {
-    height: 3;
-    margin: 0 1 0 1;
+    height: 1;
+    margin: 0 1;
     layout: horizontal;
     align: left middle;
+    color: #71717a;
 }
 
 .preset-btn {
     margin-right: 1;
-    min-width: 13;
-    background: #18181b;
-    border: solid #27272a;
-    color: #64748b;
-    height: 3;
+    min-width: 10;
+    background: #141417;
+    border: none;
+    color: #71717a;
+    height: 1;
 }
 
 .preset-btn:hover {
     background: #1e293b;
-    border: solid #3b82f6;
-    color: #f2f2f2;
+    color: #e4e4e7;
 }
 
 .preset-btn:focus {
     background: #1e293b;
-    border: solid #3b82f6;
     color: #3b82f6;
 }
 
 #status-label {
-    color: #64748b;
+    color: #71717a;
     height: 1;
     padding: 0 2;
     dock: bottom;
-    background: #0e0e10;
+    background: #09090b;
 }
 
 /* ── Key Gate Screen ──────────────────────────────────────────────── */
 
 KeyGateScreen {
     align: center middle;
-    background: #0e0e10;
+    background: #09090b;
 }
 
 #gate-box {
@@ -214,7 +261,7 @@ KeyGateScreen {
     height: auto;
     border: solid #3b82f6;
     padding: 2 4;
-    background: #18181b;
+    background: #141417;
 }
 
 #gate-title {
@@ -226,14 +273,14 @@ KeyGateScreen {
 
 #gate-subtitle {
     text-align: center;
-    color: #64748b;
+    color: #71717a;
     margin-bottom: 2;
 }
 
 #key-input {
     margin-bottom: 1;
     border: solid #27272a;
-    background: #0e0e10;
+    background: #09090b;
 }
 
 #key-input:focus {
@@ -260,19 +307,19 @@ KeyGateScreen {
 
 #gate-hint {
     text-align: center;
-    color: #64748b;
+    color: #71717a;
     margin-top: 1;
 }
 
 /* ── Footer ───────────────────────────────────────────────────────── */
 
 Footer {
-    background: #18181b;
-    color: #64748b;
+    background: #141417;
+    color: #71717a;
     height: 1;
 }
 
 FooterKey {
     background: #27272a;
-    color: #f2f2f2;
+    color: #e4e4e7;
 }

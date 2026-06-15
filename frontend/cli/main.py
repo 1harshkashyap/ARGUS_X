@@ -24,7 +24,7 @@ class ArgusApp(App):
 
     CSS_PATH = "app.tcss"
     TITLE    = "ARGUS-X"
-    SUB_TITLE = "Defense Console"
+    SUB_TITLE = "Defense Console v2.0"
 
     BINDINGS = [
         Binding("q",    "quit",          "Quit",         show=True),

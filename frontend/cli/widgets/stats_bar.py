@@ -1,50 +1,68 @@
-"""Stats bar — single Rich markup string, always fits on one line."""
+"""Stats bar — single-line compact metrics bar. SOC command center style."""
 from __future__ import annotations
 from textual.widget import Widget
 from textual.app import ComposeResult
 from textual.widgets import Static
+
+# ── Design system colors (match app.tcss) ─────────────────────────────
+_VOID      = "#09090b"
+_SURFACE   = "#141417"
+_ACCENT    = "#3b82f6"
+_FG_PRI    = "#e4e4e7"
+_FG_SEC    = "#71717a"
+_FG_DIM    = "#3f3f46"
+_BORDER    = "#27272a"
+_THREAT    = "#ef4444"
+_CLEAN     = "#22c55e"
+_WARNING   = "#f59e0b"
 
 
 def _fmt_uptime(seconds: float) -> str:
     s = int(seconds)
     h, r = divmod(s, 3600)
     m, s = divmod(r, 60)
-    if h: return f"{h}h{m}m"
-    if m: return f"{m}m{s}s"
+    if h:
+        return f"{h}h{m}m"
+    if m:
+        return f"{m}m{s}s"
     return f"{s}s"
 
 
-def _fmt_rate(rate: float) -> str:
-    return f"{rate * 100:.1f}%"
-
-
 class StatsBar(Widget):
+    """Single-line stats bar. Health dot → logo → blocked → events → clean → bypass → rate → uptime → service dots."""
+
     DEFAULT_CSS = """
     StatsBar {
-        height: 3;
-        background: #18181b;
+        height: 2;
+        background: #141417;
         border-bottom: solid #27272a;
         padding: 0 1;
         layout: vertical;
-        align: left middle;
+        content-align: left middle;
     }
-    #sb-line1 { height: 1; }
-    #sb-line2 { height: 1; color: #64748b; }
+    #sb-line { height: 1; width: 1fr; }
     """
 
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._online: bool = False
+
     def compose(self) -> ComposeResult:
-        yield Static("", id="sb-line1")
-        yield Static("", id="sb-line2")
+        yield Static("", id="sb-line")
 
     def on_mount(self) -> None:
-        self.query_one("#sb-line1", Static).update(
-            "[bold #3b82f6]ARGUS-X[/]  "
-            "[#64748b]● Connecting...[/]"
+        self.query_one("#sb-line", Static).update(
+            f"[{_FG_DIM}]●[/] [{_ACCENT} bold]ARGUS-X[/]  "
+            f"[{_FG_SEC}]Connecting...[/]"
         )
 
     def set_online(self, online: bool) -> None:
-        # Updated via update_stats — dot color set there
-        pass
+        self._online = online
+        if not online:
+            self.query_one("#sb-line", Static).update(
+                f"[{_THREAT}]✕[/] [{_ACCENT} bold]ARGUS-X[/]  "
+                f"[{_THREAT}]OFFLINE[/]"
+            )
 
     def update_stats(self, data: dict) -> None:
         total    = data.get("total_events",  0)
@@ -57,40 +75,41 @@ class StatsBar(Widget):
         ml_svc   = services.get("ml_classifier", "—")
         bt_svc   = services.get("battle_engine",  "—")
 
-        # Health dot
-        dot_color = "#22c55e"
+        # Health dot — reflects actual connection status
+        dot = f"[{_CLEAN}]●[/]" if self._online else f"[{_THREAT}]✕[/]"
 
-        # Rate color
-        rate_color = "#ef4444" if rate > 0.5 else \
-                     "#f59e0b" if rate > 0.2 else "#22c55e"
+        # Rate color — escalates with threat level
+        rate_pct = f"{rate * 100:.0f}%"
+        if rate > 0.5:
+            rate_c = _THREAT
+        elif rate > 0.2:
+            rate_c = _WARNING
+        else:
+            rate_c = _CLEAN
 
-        # ML color
-        ml_color  = "#22c55e"  if ml_svc  == "online"   else \
-                    "#f59e0b"  if ml_svc  == "degraded" else "#64748b"
+        # Service dots — rightmost for glanceable status
+        ml_dot = f"[{_CLEAN}]●[/]" if ml_svc == "online" else \
+                 f"[{_WARNING}]◉[/]" if ml_svc == "degraded" else \
+                 f"[{_FG_DIM}]○[/]"
+        bt_dot = f"[{_CLEAN}]●[/]" if bt_svc not in ("disabled", "—") else \
+                 f"[{_FG_DIM}]○[/]"
 
-        # Battle color
-        bt_color  = "#22c55e" if bt_svc not in ("disabled", "—") else "#64748b"
+        # Bypass highlight — if bypasses > 0, show in threat color
+        byp_c = _THREAT if bypasses > 0 else _FG_SEC
 
-        line1 = (
-            f"[bold #3b82f6]ARGUS-X[/]  "
-            f"[{dot_color}]●[/]  "
-            f"[#64748b]EVENTS[/] [bold #f2f2f2]{total}[/]  "
-            f"[#27272a]│[/]  "
-            f"[#64748b]BLOCKED[/] [bold #ef4444]{blocked}[/]  "
-            f"[#27272a]│[/]  "
-            f"[#64748b]CLEAN[/] [bold #22c55e]{clean}[/]  "
-            f"[#27272a]│[/]  "
-            f"[#64748b]BYPASSED[/] [bold]{bypasses}[/]  "
-            f"[#27272a]│[/]  "
-            f"[#64748b]RATE[/] [{rate_color}]{_fmt_rate(rate)}[/]  "
-            f"[#27272a]│[/]  "
-            f"[#64748b]UP[/] [bold]{_fmt_uptime(uptime)}[/]"
+        line = (
+            f"{dot} [{_ACCENT} bold]ARGUS-X[/]  "
+            f"[{_BORDER}]│[/] "
+            f"[{_THREAT} bold]{blocked}[/][{_FG_SEC}] blk[/]  "
+            f"[{_FG_PRI} bold]{total}[/][{_FG_SEC}] evt[/]  "
+            f"[{_CLEAN}]{clean}[/][{_FG_SEC}] cln[/]  "
+            f"[{byp_c}]{bypasses}[/][{_FG_SEC}] byp[/]  "
+            f"[{_BORDER}]│[/] "
+            f"[{rate_c} bold]{rate_pct}[/][{_FG_SEC}] rate[/]  "
+            f"[{_FG_PRI}]{_fmt_uptime(uptime)}[/][{_FG_SEC}] up[/]  "
+            f"[{_BORDER}]│[/] "
+            f"{ml_dot}[{_FG_SEC}]ml[/] "
+            f"{bt_dot}[{_FG_SEC}]btl[/]"
         )
-        line2 = (
-            f"[#64748b]ML[/] [{ml_color}]{ml_svc.upper()}[/]  "
-            f"[#27272a]│[/]  "
-            f"[#64748b]BATTLE[/] [{bt_color}]{bt_svc.upper()}[/]"
-        )
 
-        self.query_one("#sb-line1", Static).update(line1)
-        self.query_one("#sb-line2", Static).update(line2)
+        self.query_one("#sb-line", Static).update(line)

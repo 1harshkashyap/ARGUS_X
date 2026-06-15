@@ -1,77 +1,65 @@
-"""Battle Engine panel — live combat stats + controls."""
+"""Battle Engine panel — Red vs Blue contest view. No static controls."""
 from __future__ import annotations
 from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
 
+# ── Design system colors ──────────────────────────────────────────────
+_FG_PRI  = "#e4e4e7"
+_FG_SEC  = "#71717a"
+_FG_DIM  = "#3f3f46"
+_BORDER  = "#27272a"
+_ACCENT  = "#3b82f6"
+_THREAT  = "#ef4444"
+_CLEAN   = "#22c55e"
+_WARNING = "#f59e0b"
+_MUTATION = "#a78bfa"
 
 _TIER_LABELS = {
-    1: ("NAIVE",      "#64748b"),
-    2: ("EVASIVE",    "#3b82f6"),
-    3: ("OBFUSCATED", "#f59e0b"),
-    4: ("CONTEXTUAL", "#ef4444"),
-    5: ("APEX",       "#a78bfa"),
-}
-
-_STRATEGY_COLORS = {
-    "NAIVE":      "#64748b",
-    "EVASIVE":    "#3b82f6",
-    "OBFUSCATED": "#f59e0b",
-    "CONTEXTUAL": "#ef4444",
-    "APEX":       "#a78bfa",
+    1: ("NAIVE",      _FG_SEC),
+    2: ("EVASIVE",    _ACCENT),
+    3: ("OBFUSCATED", _WARNING),
+    4: ("CONTEXTUAL", _THREAT),
+    5: ("APEX",       _MUTATION),
 }
 
 
 def _tier_bar(tier: int) -> str:
-    """Double-width tier bar for visibility — each tier = 2 blocks."""
-    _, color = _TIER_LABELS.get(tier, ("?", "#64748b"))
+    """10-char tier bar — each tier = 2 blocks."""
+    _, color = _TIER_LABELS.get(tier, ("?", _FG_SEC))
     filled = tier * 2
     empty  = (5 - tier) * 2
     return (
         f"[{color}]{'█' * filled}[/]"
-        f"[#27272a]{'░' * empty}[/]"
+        f"[{_BORDER}]{'░' * empty}[/]"
     )
 
 
 class BattlePanelWidget(Widget):
-    BORDER_TITLE = "BATTLE ENGINE"
+    """Battle engine — Red vs Blue metrics, bypass-first hierarchy."""
+
     DEFAULT_CSS = """
     BattlePanelWidget {
-        border: solid #27272a;
-        background: #18181b;
         width: 30%;
-        padding: 1 2;
+        background: #141417;
+        padding: 0 1;
         overflow-y: auto;
     }
-    .bp-label  { color: #64748b; }
-    .bp-value  { color: #f2f2f2; text-style: bold; }
-    .bp-section-title {
-        color: #3b82f6;
+    #bp-title {
+        height: 1;
+        color: #71717a;
         text-style: bold;
-        margin-bottom: 1;
-    }
-    #bp-shortcuts {
-        color: #64748b;
-        margin-top: 1;
-        border-top: solid #27272a;
-        padding-top: 1;
+        dock: top;
     }
     """
 
     def compose(self) -> ComposeResult:
-        yield Static("", id="bp-tick-tier")
+        yield Static("[bold #71717a]BATTLE ENGINE[/]", id="bp-title")
+        yield Static("", id="bp-headline")
         yield Static("", id="bp-tier-bar")
-        yield Static("", id="bp-counters")
+        yield Static("", id="bp-contest")
         yield Static("", id="bp-last-result")
         yield Static("", id="bp-preview")
-        yield Static(
-            "\n[#64748b]CONTROLS[/]\n"
-            "  [#3b82f6]s[/]  Simulate one cycle\n"
-            "  [#3b82f6]p[/]  Pause / Resume\n"
-            "  [#3b82f6]F1-F6[/]  Fire preset attack\n"
-            "  [#3b82f6]q[/]  Quit",
-            id="bp-shortcuts",
-        )
 
     def update_state(self, state: dict) -> None:
         tick     = state.get("tick", 0)
@@ -84,44 +72,57 @@ class BattlePanelWidget(Widget):
         last_res = state.get("last_attack_result", "NONE")
         preview  = state.get("current_attack_preview", "")
 
-        _strat_label, strat_color = _TIER_LABELS.get(tier, ("?", "#64748b"))
+        strat_label, strat_color = _TIER_LABELS.get(tier, ("?", _FG_SEC))
 
-        self.query_one("#bp-tick-tier", Static).update(
-            f"[#64748b]TICK[/]  [bold #f2f2f2]{tick}[/]"
-            f"  [#64748b]TIER[/]  [{strat_color}]{tier}/5[/]\n"
-            f"[#64748b]STRATEGY[/]  [{strat_color}]{strategy}[/]"
+        # Block rate is the headline number
+        block_rate = f"{blocks / attacks * 100:.0f}%" if attacks else "—"
+        rate_color = _CLEAN if attacks and blocks / attacks > 0.9 else \
+                     _WARNING if attacks and blocks / attacks > 0.5 else \
+                     _THREAT if attacks else _FG_SEC
+
+        # Bypass count is T1 THREAT when >0
+        byp_color = _THREAT if bypasses > 0 else _FG_SEC
+
+        self.query_one("#bp-headline", Static).update(
+            f"\n[{_FG_SEC}]BLOCK RATE[/]  "
+            f"[{rate_color} bold]{block_rate}[/]  "
+            f"[{_FG_SEC}]tick[/] [{_FG_PRI}]{tick}[/]  "
+            f"[{_FG_SEC}]tier[/] [{strat_color}]{tier}/5 {strategy}[/]"
         )
 
         self.query_one("#bp-tier-bar", Static).update(
-            f"\n{_tier_bar(tier)}  "
-            f"[{strat_color}]{_strat_label}[/]\n"
+            f"{_tier_bar(tier)}  [{strat_color}]{strat_label}[/]"
         )
 
-        block_rate = f"{blocks / attacks * 100:.0f}%" if attacks else "—"
-        self.query_one("#bp-counters", Static).update(
-            f"[#64748b]ATTACKS [/]  [bold]{attacks}[/]\n"
-            f"[#22c55e]BLOCKS  [/]  [bold #22c55e]{blocks}[/]\n"
-            f"[#ef4444]BYPASSES[/]  [bold #ef4444]{bypasses}[/]\n"
-            f"[#a78bfa]PATCHES [/]  [bold #a78bfa]{patches}[/]\n"
-            f"[#64748b]RATE    [/]  [bold]{block_rate}[/]"
+        # Red vs Blue contest — two columns
+        self.query_one("#bp-contest", Static).update(
+            f"\n[{_THREAT} bold]RED[/]                [{_CLEAN} bold]BLUE[/]\n"
+            f"[{_FG_SEC}]attacks[/]  [{_FG_PRI} bold]{attacks:<8}[/]"
+            f"[{_FG_SEC}]blocks [/]  [{_CLEAN} bold]{blocks}[/]\n"
+            f"[{_FG_SEC}]bypass [/]  [{byp_color} bold]{bypasses:<8}[/]"
+            f"[{_FG_SEC}]patches[/]  [{_MUTATION} bold]{patches}[/]"
         )
 
-        result_color = "#22c55e" if last_res == "BLOCKED" else \
-                       "#ef4444" if last_res == "BYPASSED" else \
-                       "#64748b"
+        result_color = _CLEAN if last_res == "BLOCKED" else \
+                       _THREAT if last_res == "BYPASSED" else _FG_DIM
         self.query_one("#bp-last-result", Static).update(
-            f"\n[#64748b]LAST RESULT[/]  [{result_color}]{last_res}[/]"
+            f"\n[{_FG_SEC}]LAST[/]  [{result_color} bold]{last_res}[/]"
         )
 
         if preview:
-            trimmed = preview[:55] + "…" if len(preview) > 55 else preview
+            trimmed = preview[:60] + "…" if len(preview) > 60 else preview
             self.query_one("#bp-preview", Static).update(
-                f"[#64748b]LAST ATTACK[/]\n"
-                f"[#64748b italic]{trimmed}[/]"
+                f"\n[{_FG_SEC}]LAST ATTACK[/]\n"
+                f"[{_FG_DIM} italic]{trimmed}[/]"
             )
 
     def set_paused(self, paused: bool) -> None:
         """Visual indicator when paused."""
-        title = "BATTLE ENGINE  [#f59e0b]PAUSED[/]" if paused \
-                else "BATTLE ENGINE"
-        self.border_title = title
+        if paused:
+            self.query_one("#bp-title", Static).update(
+                f"[bold #71717a]BATTLE ENGINE[/]  [{_WARNING} bold]▌▌ PAUSED[/]"
+            )
+        else:
+            self.query_one("#bp-title", Static).update(
+                "[bold #71717a]BATTLE ENGINE[/]"
+            )
