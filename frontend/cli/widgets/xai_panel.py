@@ -108,9 +108,10 @@ class XAIPanelWidget(Widget):
         )
 
         # Sophistication bar
-        soph_filled = soph_score
-        soph_empty  = 10 - soph_score
-        soph_bar    = (
+        # 20-char bar gives better visual weight even at score=1
+        soph_filled = soph_score * 2
+        soph_empty  = (10 - soph_score) * 2
+        soph_bar = (
             f"[{label_color}]{'█' * soph_filled}[/]"
             f"[#27272a]{'░' * soph_empty}[/]"
         )
@@ -138,6 +139,12 @@ class XAIPanelWidget(Widget):
                 )
                 bar = _confidence_bar(conf)
                 sig = signals[0] if signals else ""
+
+                # Update outdated ML placeholder messages
+                if "Day 7" in sig or "pending" in sig.lower():
+                    sig = "ML disabled — set ML_ENABLED=true to activate"
+                if "Day 7" in reason or "DistilBERT" in reason:
+                    reason = "ML semantic classifier is currently disabled (ML_ENABLED=false)."
 
                 widget.update(
                     f"\n[#3b82f6]{name}[/]  {trig_str}\n"

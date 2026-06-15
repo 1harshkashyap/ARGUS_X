@@ -141,14 +141,14 @@ class InputPanelWidget(Widget):
     def compose(self) -> ComposeResult:
         with TabbedContent(id="input-tabs", initial="chat"):
             with TabPane("Chat", id="chat"):
-                yield RichLog(id="chat-log", highlight=True, markup=True)
+                yield RichLog(id="chat-log", highlight=True, markup=True, wrap=True)
                 with Horizontal(classes="input-row"):
                     yield Input(
                         placeholder="Ask the HR assistant anything...",
                         id="chat-input",
                     )
             with TabPane("Red Team", id="redteam"):
-                yield RichLog(id="rt-log", highlight=True, markup=True)
+                yield RichLog(id="rt-log", highlight=True, markup=True, wrap=True)
                 with Horizontal(id="rt-presets"):
                     for label in PRESETS:
                         yield Button(
@@ -211,7 +211,7 @@ class InputPanelWidget(Widget):
             )
         else:
             chat_log.write(
-                f"[bold #22c55e]ARGUS-X[/]  {response[:200]}\n"
+                f"[bold #22c55e]ARGUS-X[/]  {response[:400]}\n"
                 f"[#64748b]          {latency:.0f}ms[/]"
             )
         self._set_status("Ready")

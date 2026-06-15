@@ -48,6 +48,7 @@ class ArgusApp(App):
         self._api_key:   str  = ""
         self._is_paused: bool = False
         self._chat_busy: bool = False
+        self._last_health_services: dict = {}
 
     # ── Composition ───────────────────────────────────────────────────
 
@@ -90,19 +91,22 @@ class ArgusApp(App):
 
     async def _refresh_health(self) -> None:
         result = await api.health()
-        bar = self.query_one(StatsBar)
-        bar.set_online(isinstance(result, api.Ok))
+        bar    = self.query_one(StatsBar)
+        if isinstance(result, api.Ok):
+            self._last_health_services = result.data.get("services", {})
+            bar.set_online(True)
+        else:
+            self._last_health_services = {}
+            bar.set_online(False)
 
     async def _refresh_stats(self) -> None:
         result = await api.stats()
         if isinstance(result, api.Ok):
             data = result.data
-            bar  = self.query_one(StatsBar)
-            # Merge service info from health into stats
-            health_res = await api.health()
-            if isinstance(health_res, api.Ok):
-                data["services"] = health_res.data.get("services", {})
-            bar.update_stats(data)
+            # Inject cached health services if available
+            if self._last_health_services:
+                data["services"] = self._last_health_services
+            self.query_one(StatsBar).update_stats(data)
 
     async def _refresh_events(self) -> None:
         result = await api.logs(limit=50)

@@ -14,17 +14,13 @@ StatsBar {
     height: 3;
     background: #18181b;
     border-bottom: solid #27272a;
-    layout: horizontal;
-    align: center middle;
-    padding: 0 2;
+    padding: 0 1;
+    layout: vertical;
+    align: left middle;
 }
 
-#sb-logo {
-    color: #3b82f6;
-    text-style: bold;
-    width: 10;
-    padding-right: 2;
-}
+#sb-line1 { height: 1; }
+#sb-line2 { height: 1; color: #64748b; }
 
 /* ── Main 3-column layout ─────────────────────────────────────────── */
 
@@ -41,6 +37,7 @@ EventListWidget {
     background: #18181b;
     border-title-color: #64748b;
     border-title-style: bold;
+    border-title-align: left;
 }
 
 EventListWidget DataTable {
@@ -73,6 +70,7 @@ XAIPanelWidget {
     background: #18181b;
     border-title-color: #64748b;
     border-title-style: bold;
+    border-title-align: left;
     border-left: solid #3b82f6;
     padding: 1 2;
     overflow-y: auto;
@@ -93,6 +91,7 @@ BattlePanelWidget {
     background: #18181b;
     border-title-color: #64748b;
     border-title-style: bold;
+    border-title-align: left;
     padding: 1 2;
     overflow-y: auto;
 }
@@ -270,6 +269,7 @@ KeyGateScreen {
 Footer {
     background: #18181b;
     color: #64748b;
+    height: 1;
 }
 
 FooterKey {

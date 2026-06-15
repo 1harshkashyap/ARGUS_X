@@ -23,9 +23,10 @@ _STRATEGY_COLORS = {
 
 
 def _tier_bar(tier: int) -> str:
-    filled = tier
-    empty  = 5 - tier
+    """Double-width tier bar for visibility — each tier = 2 blocks."""
     _, color = _TIER_LABELS.get(tier, ("?", "#64748b"))
+    filled = tier * 2
+    empty  = (5 - tier) * 2
     return (
         f"[{color}]{'█' * filled}[/]"
         f"[#27272a]{'░' * empty}[/]"
@@ -92,7 +93,8 @@ class BattlePanelWidget(Widget):
         )
 
         self.query_one("#bp-tier-bar", Static).update(
-            f"\n{_tier_bar(tier)}\n"
+            f"\n{_tier_bar(tier)}  "
+            f"[{strat_color}]{_strat_label}[/]\n"
         )
 
         block_rate = f"{blocks / attacks * 100:.0f}%" if attacks else "—"

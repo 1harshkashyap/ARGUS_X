@@ -74,14 +74,12 @@ class EventListWidget(Widget):
 
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
-        table.add_columns(
-            Text("TIME",    style="#64748b"),
-            Text("STATUS",  style="#64748b"),
-            Text("TYPE",    style="#64748b"),
-            Text("PREVIEW", style="#64748b"),
-            Text("SCORE",   style="#64748b"),
-            Text("ID",      style="#64748b"),
-        )
+        table.add_column(Text("TIME",    style="#64748b"), width=10)
+        table.add_column(Text("STATUS",  style="#64748b"), width=12)
+        table.add_column(Text("TYPE",    style="#64748b"), width=5)
+        table.add_column(Text("PREVIEW", style="#64748b"), width=36)
+        table.add_column(Text("SCORE",   style="#64748b"), width=6)
+        table.add_column(Text("FP",      style="#64748b"), width=9)
 
     def load_events(self, events: list[dict]) -> None:
         """Replace event list with fresh data from API."""
@@ -97,7 +95,7 @@ class EventListWidget(Widget):
             status_text = Text("● BLOCKED", style="bold #ef4444") if blocked \
                      else Text("○ CLEAN",   style="bold #22c55e")
             type_text   = Text(abbrev, style=f"bold {color}")
-            preview     = str(ev.get("message_preview", ""))[:38]
+            preview     = str(ev.get("message_preview", ""))[:34]
             score       = ev.get("threat_score", 0.0)
             score_color = "#ef4444" if score > 0.8 else \
                           "#f59e0b" if score > 0.4 else "#22c55e"

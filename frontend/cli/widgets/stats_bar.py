@@ -1,4 +1,4 @@
-"""Stats bar — docked at top, shows live system metrics."""
+"""Stats bar — single Rich markup string, always fits on one line."""
 from __future__ import annotations
 from textual.widget import Widget
 from textual.app import ComposeResult
@@ -6,29 +6,16 @@ from textual.widgets import Static
 
 
 def _fmt_uptime(seconds: float) -> str:
-    seconds = int(seconds)
-    h, remainder = divmod(seconds, 3600)
-    m, s = divmod(remainder, 60)
-    if h:
-        return f"{h}h {m}m"
-    if m:
-        return f"{m}m {s}s"
+    s = int(seconds)
+    h, r = divmod(s, 3600)
+    m, s = divmod(r, 60)
+    if h: return f"{h}h{m}m"
+    if m: return f"{m}m{s}s"
     return f"{s}s"
 
 
 def _fmt_rate(rate: float) -> str:
     return f"{rate * 100:.1f}%"
-
-
-class StatPill(Static):
-    DEFAULT_CSS = """
-    StatPill {
-        padding: 0 2;
-        border: solid $panel-lighten-1;
-        height: 1;
-        margin-right: 1;
-    }
-    """
 
 
 class StatsBar(Widget):
@@ -37,84 +24,73 @@ class StatsBar(Widget):
         height: 3;
         background: #18181b;
         border-bottom: solid #27272a;
-        layout: horizontal;
-        align: center middle;
-        padding: 0 2;
+        padding: 0 1;
+        layout: vertical;
+        align: left middle;
     }
-    #sb-logo {
-        color: #3b82f6;
-        text-style: bold;
-        width: 12;
-        padding-right: 2;
-    }
-    #sb-health-dot {
-        width: 3;
-        padding-right: 1;
-    }
-    .sb-label { color: #64748b; }
-    .sb-value { color: #f2f2f2; text-style: bold; }
-    .sb-value-bad  { color: #ef4444; text-style: bold; }
-    .sb-value-good { color: #22c55e; text-style: bold; }
-    .sb-sep { color: #27272a; width: 1; }
+    #sb-line1 { height: 1; }
+    #sb-line2 { height: 1; color: #64748b; }
     """
 
     def compose(self) -> ComposeResult:
-        yield Static("ARGUS-X", id="sb-logo")
-        yield Static("●", id="sb-health-dot")
-        yield Static("[#64748b]EVENTS[/] [bold]—[/]",    id="sb-events")
-        yield Static(" [#27272a]|[/] ", classes="sb-sep")
-        yield Static("[#64748b]BLOCKED[/] [bold]—[/]",   id="sb-blocked")
-        yield Static(" [#27272a]|[/] ", classes="sb-sep")
-        yield Static("[#64748b]CLEAN[/] [bold]—[/]",     id="sb-clean")
-        yield Static(" [#27272a]|[/] ", classes="sb-sep")
-        yield Static("[#64748b]RATE[/] [bold]—[/]",      id="sb-rate")
-        yield Static(" [#27272a]|[/] ", classes="sb-sep")
-        yield Static("[#64748b]UPTIME[/] [bold]—[/]",    id="sb-uptime")
-        yield Static(" [#27272a]|[/] ", classes="sb-sep")
-        yield Static("[#64748b]ML[/] [bold]—[/]",        id="sb-ml")
-        yield Static(" [#27272a]|[/] ", classes="sb-sep")
-        yield Static("[#64748b]BATTLE[/] [bold]—[/]",    id="sb-battle")
+        yield Static("", id="sb-line1")
+        yield Static("", id="sb-line2")
+
+    def on_mount(self) -> None:
+        self.query_one("#sb-line1", Static).update(
+            "[bold #3b82f6]ARGUS-X[/]  "
+            "[#64748b]● Connecting...[/]"
+        )
 
     def set_online(self, online: bool) -> None:
-        dot = self.query_one("#sb-health-dot", Static)
-        if online:
-            dot.update("[#22c55e]●[/]")
-        else:
-            dot.update("[#ef4444]●[/]")
+        # Updated via update_stats — dot color set there
+        pass
 
     def update_stats(self, data: dict) -> None:
-        total   = data.get("total_events", 0)
-        blocked = data.get("total_blocked", 0)
-        clean   = data.get("total_clean", 0)
-        rate    = data.get("block_rate", 0.0)
-        uptime  = data.get("uptime_seconds", 0.0)
-        ml_svc  = data.get("services", {}).get("ml_classifier", "—")
-        bt_svc  = data.get("services", {}).get("battle_engine", "—")
+        total    = data.get("total_events",  0)
+        blocked  = data.get("total_blocked", 0)
+        clean    = data.get("total_clean",   0)
+        bypasses = data.get("total_bypasses", 0)
+        rate     = data.get("block_rate",    0.0)
+        uptime   = data.get("uptime_seconds", 0.0)
+        services = data.get("services",      {})
+        ml_svc   = services.get("ml_classifier", "—")
+        bt_svc   = services.get("battle_engine",  "—")
 
-        self.query_one("#sb-events",  Static).update(
-            f"[#64748b]EVENTS[/] [bold]{total}[/]"
-        )
-        blocked_color = "#ef4444" if blocked > 0 else "#f2f2f2"
-        self.query_one("#sb-blocked", Static).update(
-            f"[#64748b]BLOCKED[/] [{blocked_color}]{blocked}[/]"
-        )
-        self.query_one("#sb-clean",   Static).update(
-            f"[#64748b]CLEAN[/] [#22c55e]{clean}[/]"
-        )
-        rate_color = "#ef4444" if rate > 0.5 else "#f59e0b" if rate > 0.2 else "#22c55e"
-        self.query_one("#sb-rate",    Static).update(
-            f"[#64748b]RATE[/] [{rate_color}]{_fmt_rate(rate)}[/]"
-        )
-        self.query_one("#sb-uptime",  Static).update(
-            f"[#64748b]UPTIME[/] [bold]{_fmt_uptime(uptime)}[/]"
-        )
+        # Health dot
+        dot_color = "#22c55e"
 
-        ml_color = "#22c55e" if ml_svc == "online" else \
-                   "#f59e0b" if ml_svc == "degraded" else "#64748b"
-        self.query_one("#sb-ml",      Static).update(
-            f"[#64748b]ML[/] [{ml_color}]{ml_svc.upper()}[/]"
+        # Rate color
+        rate_color = "#ef4444" if rate > 0.5 else \
+                     "#f59e0b" if rate > 0.2 else "#22c55e"
+
+        # ML color
+        ml_color  = "#22c55e"  if ml_svc  == "online"   else \
+                    "#f59e0b"  if ml_svc  == "degraded" else "#64748b"
+
+        # Battle color
+        bt_color  = "#22c55e" if bt_svc not in ("disabled", "—") else "#64748b"
+
+        line1 = (
+            f"[bold #3b82f6]ARGUS-X[/]  "
+            f"[{dot_color}]●[/]  "
+            f"[#64748b]EVENTS[/] [bold #f2f2f2]{total}[/]  "
+            f"[#27272a]│[/]  "
+            f"[#64748b]BLOCKED[/] [bold #ef4444]{blocked}[/]  "
+            f"[#27272a]│[/]  "
+            f"[#64748b]CLEAN[/] [bold #22c55e]{clean}[/]  "
+            f"[#27272a]│[/]  "
+            f"[#64748b]BYPASSED[/] [bold]{bypasses}[/]  "
+            f"[#27272a]│[/]  "
+            f"[#64748b]RATE[/] [{rate_color}]{_fmt_rate(rate)}[/]  "
+            f"[#27272a]│[/]  "
+            f"[#64748b]UP[/] [bold]{_fmt_uptime(uptime)}[/]"
         )
-        bt_color = "#22c55e" if bt_svc != "disabled" else "#64748b"
-        self.query_one("#sb-battle",  Static).update(
+        line2 = (
+            f"[#64748b]ML[/] [{ml_color}]{ml_svc.upper()}[/]  "
+            f"[#27272a]│[/]  "
             f"[#64748b]BATTLE[/] [{bt_color}]{bt_svc.upper()}[/]"
         )
+
+        self.query_one("#sb-line1", Static).update(line1)
+        self.query_one("#sb-line2", Static).update(line2)

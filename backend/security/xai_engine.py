@@ -139,20 +139,21 @@ class XAIEngine:
         )
 
     def _layer_ml(self, ml_result: Optional[Any]) -> LayerDecision:
-        """Layer 2 — ML Classifier (active from Day 7)."""
+        """Layer 2 — ML Classifier."""
         if ml_result is None:
+            # ML was skipped (firewall already blocked) or unavailable
             return LayerDecision(
                 layer_name="ML Classifier",
                 triggered=False,
                 confidence=0.0,
-                signals=["Semantic analysis pending (Day 7)"],
+                signals=["Skipped — firewall resolved threat"],
                 reasoning=(
-                    "ONNX DistilBERT classifier not yet active. "
-                    "Semantic threat detection will be enabled on Day 7."
+                    "ML classifier was not invoked. The regex firewall "
+                    "already resolved this request."
                 )
             )
 
-        # Day 7+ path — ml_result has triggered, confidence, method attrs
+        # ML was invoked — ml_result has triggered, confidence, method attrs
         triggered  = bool(getattr(ml_result, "triggered",  False))
         confidence = float(getattr(ml_result, "confidence", 0.0))
         method     = str(getattr(ml_result,   "method",    "UNKNOWN"))
