@@ -31,8 +31,8 @@ class ArgusApp(App):
         Binding("s",    "simulate",      "Simulate",     show=True),
         Binding("p",    "toggle_pause",  "Pause/Resume", show=True),
         Binding("r",    "refresh_all",   "Refresh",      show=True),
-        Binding("1",    "focus_chat",    "Chat",         show=False),
-        Binding("2",    "focus_redteam", "Red Team",     show=False),
+        Binding("1",    "focus_chat",    "HR Assistant",   show=True),
+        Binding("2",    "focus_redteam", "Attack Console", show=True),
         Binding("f1",   "preset_1",      "F1 Inject",    show=False),
         Binding("f2",   "preset_2",      "F2 Jailbreak", show=False),
         Binding("f3",   "preset_3",      "F3 Exfil",     show=False),
@@ -113,6 +113,15 @@ class ArgusApp(App):
         if isinstance(result, api.Ok):
             events = result.data.get("events", [])
             self.query_one(EventListWidget).load_events(events)
+
+            # Auto-show last blocked event if XAI panel is empty
+            xai_panel = self.query_one(XAIPanelWidget)
+            if xai_panel.is_empty():
+                latest_blocked = next(
+                    (e for e in events if e.get("blocked")), None
+                )
+                if latest_blocked:
+                    xai_panel.show_event(latest_blocked)
 
     async def _refresh_battle(self) -> None:
         result = await api.battle_state()

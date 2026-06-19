@@ -9,6 +9,7 @@ from textual.screen import Screen
 from textual.widgets import Static, Input, Button, Label
 from textual.containers import Center, Middle, Vertical
 from textual import on
+from theme import VOID, SURFACE, ACCENT, BORDER, FG_SECONDARY, THREAT
 
 
 class KeyGateScreen(Screen[str]):
@@ -17,66 +18,66 @@ class KeyGateScreen(Screen[str]):
     Parent app receives it via callback passed to push_screen.
     """
 
-    CSS = """
-    KeyGateScreen {
+    CSS = f"""
+    KeyGateScreen {{
         align: center middle;
-        background: #0a0a0c;
-    }
+        background: {VOID};
+    }}
 
-    #gate-box {
+    #gate-box {{
         width: 62;
         height: auto;
-        border: solid #4a9eff;
+        border: solid {ACCENT};
         padding: 2 4;
-        background: #12121a;
-    }
+        background: {SURFACE};
+    }}
 
-    #gate-title {
+    #gate-title {{
         text-align: center;
         text-style: bold;
-        color: #4a9eff;
+        color: {ACCENT};
         margin-bottom: 1;
-    }
+    }}
 
-    #gate-subtitle {
+    #gate-subtitle {{
         text-align: center;
-        color: #6b6b7a;
+        color: {FG_SECONDARY};
         margin-bottom: 2;
-    }
+    }}
 
-    #gate-error {
-        color: #ff4757;
+    #gate-error {{
+        color: {THREAT};
         text-align: center;
         height: 1;
         margin-top: 1;
-    }
+    }}
 
-    #key-input {
+    #key-input {{
         margin-bottom: 1;
-        border: solid #252530;
-        background: #0a0a0c;
-    }
+        border: solid {BORDER};
+        background: {VOID};
+    }}
 
-    #key-input:focus {
-        border: solid #4a9eff;
-    }
+    #key-input:focus {{
+        border: solid {ACCENT};
+    }}
 
-    #submit-btn {
+    #submit-btn {{
         width: 100%;
-        background: #4a9eff;
+        background: {ACCENT};
         color: #ffffff;
         text-style: bold;
-    }
+    }}
 
-    #submit-btn:hover {
-        background: #3a8eef;
-    }
+    #submit-btn:hover {{
+        background: #2563eb;
+    }}
 
-    #gate-hint {
+    #gate-hint {{
         text-align: center;
-        color: #6b6b7a;
+        color: {FG_SECONDARY};
         margin-top: 1;
-    }
+    }}
     """
 
     def compose(self) -> ComposeResult:

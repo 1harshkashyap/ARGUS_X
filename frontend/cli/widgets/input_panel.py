@@ -12,16 +12,10 @@ from textual.widgets import (
 )
 from textual.containers import Horizontal
 from textual.message import Message
-
-# ── Design system colors (match app.tcss v3.0) ───────────────────────
-_FG_PRI    = "#e2e2e8"
-_FG_SEC    = "#6b6b7a"
-_FG_DIM    = "#3a3a48"
-_ACCENT    = "#4a9eff"
-_THREAT    = "#ff4757"
-_CLEAN     = "#2ed573"
-_WARNING   = "#ffa502"
-_MUTATION  = "#a78bfa"
+from theme import (
+    FG_PRIMARY, FG_SECONDARY, FG_DIM, ACCENT,
+    THREAT, STATUS_CLEAN, STATUS_WARNING, STATUS_MUTATION,
+)
 
 # ── Messages posted by InputPanel ────────────────────────────────────
 
@@ -101,6 +95,15 @@ class InputPanelWidget(Widget):
                     )
             with TabPane("Attack Console", id="redteam"):
                 yield RichLog(id="rt-log", highlight=True, markup=True, wrap=True)
+                yield Static(
+                    f"[{FG_DIM}]F1[/] Inject  "
+                    f"[{FG_DIM}]F2[/] Jailbreak  "
+                    f"[{FG_DIM}]F3[/] Exfil  "
+                    f"[{FG_DIM}]F4[/] Role  "
+                    f"[{FG_DIM}]F5[/] Indirect  "
+                    f"[{FG_DIM}]F6[/] APEX",
+                    id="rt-key-hint",
+                )
                 with Horizontal(id="rt-presets"):
                     for label in PRESETS:
                         yield Button(
@@ -110,7 +113,7 @@ class InputPanelWidget(Widget):
                         )
                 with Horizontal(classes="input-row"):
                     yield Input(
-                        placeholder="Custom attack payload — Enter to fire",
+                        placeholder="Custom attack payload — press Enter to fire...",
                         id="rt-input",
                     )
         yield Label("Ready", id="status-label")
@@ -118,17 +121,11 @@ class InputPanelWidget(Widget):
     def on_mount(self) -> None:
         chat_log = self.query_one("#chat-log", RichLog)
         chat_log.write(
-            f"[{_FG_SEC}]HR Assistant ready. Ask about leave, payroll, policies.[/]"
+            f"[{FG_SECONDARY}]HR Assistant ready. Ask about leave, payroll, policies.[/]"
         )
         rt_log = self.query_one("#rt-log", RichLog)
         rt_log.write(
-            f"[{_FG_SEC}]Attack Console ready.[/]  "
-            f"[{_FG_DIM}]F1[/] PI  "
-            f"[{_FG_DIM}]F2[/] JB  "
-            f"[{_FG_DIM}]F3[/] DE  "
-            f"[{_FG_DIM}]F4[/] RH  "
-            f"[{_FG_DIM}]F5[/] II  "
-            f"[{_FG_DIM}]F6[/] APEX"
+            f"[{FG_SECONDARY}]Attack Console ready. Use F1-F6 or type a custom payload.[/]"
         )
 
     # ── Chat tab ──────────────────────────────────────────────────────
@@ -145,7 +142,7 @@ class InputPanelWidget(Widget):
             return
         self._add_history(text)
         chat_log = self.query_one("#chat-log", RichLog)
-        chat_log.write(f"[{_ACCENT} bold]You[/]  {text}")
+        chat_log.write(f"[{ACCENT} bold]You[/]  {text}")
         self.query_one("#chat-input", Input).clear()
         self._set_status("Analyzing...")
         self.post_message(ChatRequest(text, self._session_id, self.api_key))
@@ -160,14 +157,14 @@ class InputPanelWidget(Widget):
         if blocked:
             action = data.get("explanation", {}).get("recommended_action", "BLOCK")
             chat_log.write(
-                f"[{_THREAT} bold]█ BLOCKED[/]  "
-                f"[{_FG_SEC}]{threat.replace('_', ' ')}  "
+                f"[{THREAT} bold]█ BLOCKED[/]  "
+                f"[{FG_SECONDARY}]{threat.replace('_', ' ')}  "
                 f"{latency:.0f}ms  {action}[/]"
             )
         else:
             chat_log.write(
-                f"[{_CLEAN} bold]ARGUS-X[/]  {response[:400]}\n"
-                f"[{_FG_SEC}]          {latency:.0f}ms[/]"
+                f"[{STATUS_CLEAN} bold]ARGUS-X[/]  {response[:400]}\n"
+                f"[{FG_SECONDARY}]          {latency:.0f}ms[/]"
             )
         self._set_status("Ready")
 
@@ -193,8 +190,8 @@ class InputPanelWidget(Widget):
     def _execute_attack(self, payload: str, label: str) -> None:
         rt_log = self.query_one("#rt-log", RichLog)
         rt_log.write(
-            f"\n[{_MUTATION} bold]► {label}[/]\n"
-            f"[{_FG_DIM}]{payload[:80]}{'…' if len(payload) > 80 else ''}[/]"
+            f"\n[{STATUS_MUTATION} bold]► {label}[/]\n"
+            f"[{FG_DIM}]{payload[:80]}{'…' if len(payload) > 80 else ''}[/]"
         )
         self._set_status(f"Firing {label}...")
         self.post_message(ChatRequest(payload, self._session_id, self.api_key))
@@ -211,11 +208,10 @@ class InputPanelWidget(Widget):
         latency  = data.get("latency_ms", 0)
 
         if blocked:
-            # Outcome first line — most important info
             rt_log.write(
-                f"[{_CLEAN} bold]✓ BLOCKED[/]  "
-                f"[{_THREAT}]{threat.replace('_', ' ')}[/]  "
-                f"[{_FG_SEC}]{score:.2f}  "
+                f"[{STATUS_CLEAN} bold]✓ BLOCKED[/]  "
+                f"[{THREAT}]{threat.replace('_', ' ')}[/]  "
+                f"[{FG_SECONDARY}]{score:.2f}  "
                 f"{soph}/10 {label}  "
                 f"{fp[:8]}  "
                 f"{action}  "
@@ -223,9 +219,9 @@ class InputPanelWidget(Widget):
             )
         else:
             rt_log.write(
-                f"[{_THREAT} bold]✗ BYPASSED[/]  "
-                f"[{_FG_SEC}]{threat}  {latency:.0f}ms[/]\n"
-                f"[{_THREAT}]  ↳ This attack evaded detection![/]"
+                f"[{THREAT} bold]✗ BYPASSED[/]  "
+                f"[{FG_SECONDARY}]{threat}  {latency:.0f}ms[/]\n"
+                f"[{THREAT}]  ↳ This attack evaded detection![/]"
             )
         self._set_status("Ready")
 
@@ -267,7 +263,7 @@ class InputPanelWidget(Widget):
             pass
 
     def _set_status(self, msg: str) -> None:
-        self.query_one("#status-label", Label).update(f"[{_FG_SEC}]{msg}[/]")
+        self.query_one("#status-label", Label).update(f"[{FG_SECONDARY}]{msg}[/]")
         self._busy = msg != "Ready"
 
     def set_busy(self, busy: bool) -> None:
