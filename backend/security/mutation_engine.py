@@ -228,7 +228,7 @@ class MutationEngine:
             _last_mutation_by_session[session_key] = now
             # Prevent unbounded memory growth
             if len(_last_mutation_by_session) > _MAX_COOLDOWN_ENTRIES:
-                oldest_key = min(_last_mutation_by_session, key=_last_mutation_by_session.get)
+                oldest_key = min(_last_mutation_by_session, key=lambda k: _last_mutation_by_session[k])
                 del _last_mutation_by_session[oldest_key]
 
             safe_msg = (blocked_message or "")[:_MAX_ATTACK_LEN].strip()
