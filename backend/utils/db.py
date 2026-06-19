@@ -10,7 +10,8 @@ from config import settings
 # This wrapper calls the PostgREST API directly via httpx — stable, zero deps issues.
 
 _http_client: Optional[httpx.AsyncClient] = None
-_stats_lock = asyncio.Lock()
+_init_lock: Optional[asyncio.Lock] = None
+_stats_lock: Optional[asyncio.Lock] = None
 
 
 def _get_headers() -> Dict[str, str]:
@@ -32,8 +33,11 @@ async def _get_http_client() -> Optional[httpx.AsyncClient]:
     """
     Lazy initialization of async httpx client.
     Returns None if credentials not configured — system continues without DB.
+    Uses double-checked locking to prevent connection leak from concurrent first calls.
     """
-    global _http_client
+    global _http_client, _init_lock
+
+    # Fast path: already initialized
     if _http_client is not None and not _http_client.is_closed:
         return _http_client
 
@@ -41,16 +45,25 @@ async def _get_http_client() -> Optional[httpx.AsyncClient]:
         logger.warning("Supabase credentials not configured — DB operations disabled")
         return None
 
-    try:
-        _http_client = httpx.AsyncClient(
-            headers=_get_headers(),
-            timeout=httpx.Timeout(settings.DB_TIMEOUT),
-        )
-        logger.info("Supabase HTTP client initialized")
-        return _http_client
-    except Exception as e:
-        logger.error(f"Failed to initialize Supabase HTTP client: {type(e).__name__}: {str(e)[:200]}")
-        return None
+    # Lazy-create the init lock inside async context (safe on Python 3.14)
+    if _init_lock is None:
+        _init_lock = asyncio.Lock()
+
+    async with _init_lock:
+        # Re-check after acquiring lock (another coroutine may have created it)
+        if _http_client is not None and not _http_client.is_closed:
+            return _http_client
+
+        try:
+            _http_client = httpx.AsyncClient(
+                headers=_get_headers(),
+                timeout=httpx.Timeout(settings.DB_TIMEOUT),
+            )
+            logger.info("Supabase HTTP client initialized")
+            return _http_client
+        except Exception as e:
+            logger.error(f"Failed to initialize Supabase HTTP client: {type(e).__name__}: {str(e)[:200]}")
+            return None
 
 
 # ── Write operations ──────────────────────────────────────────────────
@@ -118,6 +131,9 @@ async def update_stats(increments: Dict[str, int]) -> bool:
     increments: {"total_events": 1, "total_blocked": 1}
     Uses asyncio.Lock to prevent TOCTOU race on concurrent read-modify-write.
     """
+    global _stats_lock
+    if _stats_lock is None:
+        _stats_lock = asyncio.Lock()
     async with _stats_lock:
         client = await _get_http_client()
         if not client:
