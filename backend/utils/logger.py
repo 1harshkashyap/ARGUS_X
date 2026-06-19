@@ -7,7 +7,8 @@ from typing import Optional
 # ── Key redaction patterns ────────────────────────────────────────────
 # These patterns match real API key formats and replace them with [REDACTED]
 _REDACT_PATTERNS = [
-    re.compile(r'AIza[A-Za-z0-9_\-]{30,}'),   # Gemini keys
+    re.compile(r'AIza[A-Za-z0-9_\-]{30,}'),   # Gemini keys (old format)
+    re.compile(r'AQ\.[A-Za-z0-9_\-]{20,}'),    # Gemini keys (new format)
     re.compile(r'sk-[A-Za-z0-9]{40,}'),         # OpenAI keys
     re.compile(r'eyJ[A-Za-z0-9_\-\.]{50,}'),    # JWT tokens (Supabase keys)
 ]

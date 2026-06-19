@@ -25,6 +25,12 @@ _GEMINI_TIMEOUT = 28.0
 # Minimum pattern length (too short = too broad = dangerous)
 _MIN_PATTERN_LEN = 8
 
+# Per-session mutation cooldown — prevents cost amplification attacks
+# where an attacker sends many blocked messages to trigger Gemini calls
+_MUTATION_COOLDOWN_SECONDS = 30.0
+_MAX_COOLDOWN_ENTRIES = 1000  # Prevent memory growth
+_last_mutation_by_session: dict[str, float] = {}
+
 # Patterns that are too dangerous to write as rules (would block everything)
 _DANGEROUS_PATTERNS = [
     re.compile(r"^\.\*$"),          # Matches everything
@@ -190,6 +196,24 @@ class MutationEngine:
         """
         try:
             start = time.monotonic()
+
+            # ── Cost amplification guard ─────────────────────────
+            # Limit to 1 mutation per session per _MUTATION_COOLDOWN_SECONDS
+            now = time.monotonic()
+            session_key = session_id or "__no_session__"
+            last_time = _last_mutation_by_session.get(session_key, 0.0)
+            if now - last_time < _MUTATION_COOLDOWN_SECONDS:
+                logger.info(
+                    f"Mutation throttled for session {session_key[:8]}... "
+                    f"(cooldown {_MUTATION_COOLDOWN_SECONDS}s)"
+                )
+                return
+            _last_mutation_by_session[session_key] = now
+            # Prevent unbounded memory growth
+            if len(_last_mutation_by_session) > _MAX_COOLDOWN_ENTRIES:
+                oldest_key = min(_last_mutation_by_session, key=_last_mutation_by_session.get)
+                del _last_mutation_by_session[oldest_key]
+
             safe_msg = (blocked_message or "")[:_MAX_ATTACK_LEN].strip()
 
             if not safe_msg:
