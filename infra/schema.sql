@@ -95,3 +95,23 @@ CREATE INDEX IF NOT EXISTS idx_dynamic_rules_type   ON dynamic_rules(threat_type
 ALTER PUBLICATION supabase_realtime ADD TABLE events;
 ALTER PUBLICATION supabase_realtime ADD TABLE battle_state;
 ALTER PUBLICATION supabase_realtime ADD TABLE campaigns;
+
+-- ── Row Level Security (SEC-003) ─────────────────────────────────────
+-- Backend uses service_role key which bypasses RLS.
+-- These policies block direct access via anon/authenticated keys
+-- to prevent data exposure if the anon key is ever leaked.
+
+ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE xai_decisions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE battle_state ENABLE ROW LEVEL SECURITY;
+ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dynamic_rules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE stats ENABLE ROW LEVEL SECURITY;
+
+-- Only service_role (backend) can access all tables
+CREATE POLICY "service_role_only" ON events FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "service_role_only" ON xai_decisions FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "service_role_only" ON battle_state FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "service_role_only" ON campaigns FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "service_role_only" ON dynamic_rules FOR ALL USING (auth.role() = 'service_role');
+CREATE POLICY "service_role_only" ON stats FOR ALL USING (auth.role() = 'service_role');

@@ -153,7 +153,7 @@ class ThreatCorrelator:
 
     def _campaign_id(self, pattern_family: str) -> str:
         """Generate a stable campaign ID from the pattern family."""
-        return hashlib.md5(
+        return hashlib.sha256(
             pattern_family.encode("utf-8")
         ).hexdigest()[:12].upper()
 

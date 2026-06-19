@@ -108,10 +108,27 @@ def _validate_pattern(pattern: str) -> Optional[re.Pattern]:
         logger.warning(f"Mutation: potential ReDoS pattern rejected: {pattern[:50]!r}")
         return None
 
-    # Sanity test — run on a safe string to ensure no catastrophic match
+    # Sanity test — run on safe strings to ensure no catastrophic match
+    # SEC-008 fix: test against multiple known-clean HR queries
+    # If a pattern matches any of these → reject (prevents firewall poisoning)
+    _SAFE_STRINGS = [
+        "This is a completely normal safe message with no threats at all.",
+        "What is the leave policy?",
+        "How many vacation days do I have remaining?",
+        "Can you help me with my payroll question?",
+        "Good morning, I need information about company benefits.",
+        "Hello how are you today?",
+        "When is the next public holiday?",
+        "I'd like to request time off next week.",
+    ]
     try:
-        test_input = "This is a completely normal safe message with no threats at all."
-        compiled.search(test_input)
+        for safe_msg in _SAFE_STRINGS:
+            if compiled.search(safe_msg):
+                logger.warning(
+                    f"Mutation: pattern matches clean message — rejected: "
+                    f"{pattern[:50]!r} matched {safe_msg[:40]!r}"
+                )
+                return None
     except Exception as e:
         logger.warning(f"Mutation: pattern crashed on test input: {e}")
         return None

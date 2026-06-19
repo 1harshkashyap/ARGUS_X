@@ -64,7 +64,7 @@ def _mock_response(prompt: str) -> str:
     Deterministic mock response selected by prompt hash.
     Same prompt always returns same response — useful for testing.
     """
-    idx = int(hashlib.md5(prompt.encode()).hexdigest(), 16) % len(_MOCK_RESPONSES)
+    idx = int(hashlib.sha256(prompt.encode()).hexdigest(), 16) % len(_MOCK_RESPONSES)
     return _MOCK_RESPONSES[idx]
 
 

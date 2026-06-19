@@ -8,7 +8,7 @@ import requests
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 BASE_URL = os.environ.get("ARGUS_TEST_BASE_URL", "http://localhost:8000")
-DASHBOARD_KEY = os.environ.get("ARGUS_DASHBOARD_KEY", "argus-dashboard-2025")
+DASHBOARD_KEY = os.environ.get("ARGUS_DASHBOARD_KEY", "")
 
 
 @pytest.fixture(scope="session")

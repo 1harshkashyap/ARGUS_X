@@ -25,7 +25,10 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 BASE_URL = "http://localhost:8000"
-DASHBOARD_KEY = "argus-dashboard-2025"
+DASHBOARD_KEY = os.environ.get("ARGUS_DASHBOARD_KEY", "")
+if not DASHBOARD_KEY:
+    print("[FAIL] ARGUS_DASHBOARD_KEY env var is required. Set it and retry.")
+    sys.exit(1)
 
 # Clean messages verified to pass all static + dynamic firewall rules
 CLEAN_MESSAGES = [

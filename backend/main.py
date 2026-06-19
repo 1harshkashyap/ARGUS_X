@@ -1,4 +1,5 @@
 import asyncio
+import os
 import re
 import time
 from collections import defaultdict
@@ -31,18 +32,13 @@ def _sanitize_for_log(value: str) -> str:
 
 def _get_client_ip(request: Request) -> str:
     """
-    Extract real client IP. Checks X-Forwarded-For (set by Railway/nginx
-    proxies) first, falls back to direct connection IP.
-    Only trusts the LAST entry (closest proxy) to prevent spoofing.
+    Extract real client IP via uvicorn's proxy-header resolution.
+
+    When --proxy-headers is set, uvicorn rewrites request.client.host
+    to the value from X-Forwarded-For (using its trusted-proxy list).
+    We do NOT parse X-Forwarded-For manually — that is trivially spoofed
+    when forwarded_allow_ips is broad (SEC-005 fix).
     """
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        # X-Forwarded-For: client, proxy1, proxy2
-        # Last entry is set by the closest trusted proxy — hardest to spoof.
-        # First entry is trivially spoofed by the client.
-        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
-        if parts:
-            return parts[-1]
     if request.client:
         return request.client.host
     return "unknown"
@@ -92,6 +88,20 @@ _rate_limiter = _RateLimiter(
     max_requests=settings.RATE_LIMIT_PER_MINUTE,
     window_seconds=60
 )
+
+# Stricter limiter for expensive endpoints (SEC-006: LLM cost protection)
+# /chat triggers Gemini calls; /agents/cycle triggers full battle tick
+_expensive_rate_limiter = _RateLimiter(
+    max_requests=max(settings.RATE_LIMIT_PER_MINUTE // 3, 5),  # ~10 req/min
+    window_seconds=60
+)
+
+# Paths that trigger LLM calls (Gemini/OpenAI) — need stricter rate limiting
+_EXPENSIVE_PATHS = frozenset({
+    "/api/v1/chat",
+    "/api/v1/redteam",
+    "/api/v1/agents/cycle",
+})
 
 # ── Body size limit ──────────────────────────────────────────────────
 # Reject requests > 64KB BEFORE reading the body into memory.
@@ -152,10 +162,19 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# SEC-004 fix: no allow_credentials (auth is header-based, not cookie-based)
+# Production strips localhost origins to prevent CSRF from local dev servers
+_cors_origins = settings.cors_origins
+if settings.is_production:
+    _cors_origins = [
+        o for o in _cors_origins
+        if not o.startswith("http://localhost")
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
+    allow_origins=_cors_origins,
+    allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-Dashboard-Key"],
 )
@@ -209,17 +228,31 @@ async def log_requests(request: Request, call_next):
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
-    """Enforce per-IP rate limiting. Skips health checks."""
+    """Enforce per-IP rate limiting. Skips health checks.
+    SEC-006: Expensive endpoints (LLM-triggering) get a stricter limit.
+    """
     if request.url.path == "/health":
         return await call_next(request)
 
     client_ip = _get_client_ip(request)
+
+    # Global rate limit
     if not _rate_limiter.is_allowed(client_ip):
         logger.warning(f"Rate limit exceeded for {_sanitize_for_log(client_ip)}")
         return JSONResponse(
             status_code=429,
             content={"error": "RATE_LIMIT_EXCEEDED", "message": "Too many requests. Please slow down."}
         )
+
+    # Stricter limit for expensive endpoints (SEC-006)
+    if request.url.path in _EXPENSIVE_PATHS:
+        if not _expensive_rate_limiter.is_allowed(client_ip):
+            logger.warning(f"Expensive endpoint rate limit exceeded for {_sanitize_for_log(client_ip)}")
+            return JSONResponse(
+                status_code=429,
+                content={"error": "RATE_LIMIT_EXCEEDED", "message": "Too many requests to this endpoint. Please slow down."}
+            )
+
     return await call_next(request)
 
 
@@ -318,6 +351,8 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
+    # SEC-009: forwarded_allow_ips from env (default '*' for dev, restrict in prod)
+    _fwd_ips = os.environ.get("FORWARDED_ALLOW_IPS", "*")
     uvicorn.run("main:app", host="0.0.0.0", port=8000,
                 reload=settings.is_development, log_level="info",
-                proxy_headers=True, forwarded_allow_ips="*")
+                proxy_headers=True, forwarded_allow_ips=_fwd_ips)

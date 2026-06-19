@@ -14,7 +14,7 @@ _ENV_PATH = Path(__file__).parent / ".env"
 load_dotenv(_ENV_PATH)
 
 API_URL:       str = os.getenv("ARGUS_API_URL",       "http://localhost:8000").rstrip("/")
-DASHBOARD_KEY: str = os.getenv("ARGUS_DASHBOARD_KEY", "argus-dashboard-2025")
+DASHBOARD_KEY: str = os.getenv("ARGUS_DASHBOARD_KEY", "")
 
 # GEMINI_KEY is loaded from .env as a convenience default only.
 # The user can override it at startup via the key gate screen.
