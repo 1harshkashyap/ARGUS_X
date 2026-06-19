@@ -4,17 +4,17 @@ from textual.widget import Widget
 from textual.app import ComposeResult
 from textual.widgets import Static
 
-# ── Design system colors (match app.tcss) ─────────────────────────────
-_VOID      = "#09090b"
-_SURFACE   = "#141417"
-_ACCENT    = "#3b82f6"
-_FG_PRI    = "#e4e4e7"
-_FG_SEC    = "#71717a"
-_FG_DIM    = "#3f3f46"
-_BORDER    = "#27272a"
-_THREAT    = "#ef4444"
-_CLEAN     = "#22c55e"
-_WARNING   = "#f59e0b"
+# ── Design system colors (match app.tcss v3.0) ────────────────────────
+_VOID      = "#0a0a0c"
+_SURFACE   = "#12121a"
+_ACCENT    = "#4a9eff"
+_FG_PRI    = "#e2e2e8"
+_FG_SEC    = "#6b6b7a"
+_FG_DIM    = "#3a3a48"
+_BORDER    = "#252530"
+_THREAT    = "#ff4757"
+_CLEAN     = "#2ed573"
+_WARNING   = "#ffa502"
 
 
 def _fmt_uptime(seconds: float) -> str:
@@ -31,18 +31,6 @@ def _fmt_uptime(seconds: float) -> str:
 class StatsBar(Widget):
     """Single-line stats bar. Health dot → logo → blocked → events → clean → bypass → rate → uptime → service dots."""
 
-    DEFAULT_CSS = """
-    StatsBar {
-        height: 2;
-        background: #141417;
-        border-bottom: solid #27272a;
-        padding: 0 1;
-        layout: vertical;
-        content-align: left middle;
-    }
-    #sb-line { height: 1; width: 1fr; }
-    """
-
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._online: bool = False
@@ -52,7 +40,7 @@ class StatsBar(Widget):
 
     def on_mount(self) -> None:
         self.query_one("#sb-line", Static).update(
-            f"[{_FG_DIM}]●[/] [{_ACCENT} bold]ARGUS-X[/]  "
+            f"[{_FG_DIM}]◌[/] [{_ACCENT} bold]ARGUS-X[/]  "
             f"[{_FG_SEC}]Connecting...[/]"
         )
 
@@ -97,11 +85,13 @@ class StatsBar(Widget):
         # Bypass highlight — if bypasses > 0, show in threat color
         byp_c = _THREAT if bypasses > 0 else _FG_SEC
 
+        # Blocked count gets T1 treatment — largest visual weight
+        # When block rate > 50%, rate number also gets THREAT color
         line = (
             f"{dot} [{_ACCENT} bold]ARGUS-X[/]  "
             f"[{_BORDER}]│[/] "
-            f"[{_THREAT} bold]{blocked}[/][{_FG_SEC}] blk[/]  "
-            f"[{_FG_PRI} bold]{total}[/][{_FG_SEC}] evt[/]  "
+            f"[{_THREAT} bold]{blocked}[/][{_FG_SEC}] BLK[/]  "
+            f"[{_FG_PRI}]{total}[/][{_FG_SEC}] evt[/]  "
             f"[{_CLEAN}]{clean}[/][{_FG_SEC}] cln[/]  "
             f"[{byp_c}]{bypasses}[/][{_FG_SEC}] byp[/]  "
             f"[{_BORDER}]│[/] "

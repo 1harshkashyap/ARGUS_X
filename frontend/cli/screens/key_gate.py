@@ -20,32 +20,32 @@ class KeyGateScreen(Screen[str]):
     CSS = """
     KeyGateScreen {
         align: center middle;
-        background: $background;
+        background: #0a0a0c;
     }
 
     #gate-box {
-        width: 60;
+        width: 62;
         height: auto;
-        border: solid $primary;
-        padding: 2 3;
-        background: $surface;
+        border: solid #4a9eff;
+        padding: 2 4;
+        background: #12121a;
     }
 
     #gate-title {
         text-align: center;
         text-style: bold;
-        color: $primary;
+        color: #4a9eff;
         margin-bottom: 1;
     }
 
     #gate-subtitle {
         text-align: center;
-        color: $text-muted;
+        color: #6b6b7a;
         margin-bottom: 2;
     }
 
     #gate-error {
-        color: $error;
+        color: #ff4757;
         text-align: center;
         height: 1;
         margin-top: 1;
@@ -53,15 +53,28 @@ class KeyGateScreen(Screen[str]):
 
     #key-input {
         margin-bottom: 1;
+        border: solid #252530;
+        background: #0a0a0c;
+    }
+
+    #key-input:focus {
+        border: solid #4a9eff;
     }
 
     #submit-btn {
         width: 100%;
+        background: #4a9eff;
+        color: #ffffff;
+        text-style: bold;
+    }
+
+    #submit-btn:hover {
+        background: #3a8eef;
     }
 
     #gate-hint {
         text-align: center;
-        color: $text-muted;
+        color: #6b6b7a;
         margin-top: 1;
     }
     """

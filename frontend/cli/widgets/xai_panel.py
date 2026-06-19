@@ -5,17 +5,17 @@ from textual.widget import Widget
 from textual.widgets import Static
 from textual.containers import Vertical
 
-# ── Design system colors ──────────────────────────────────────────────
-_FG_PRI  = "#e4e4e7"
-_FG_SEC  = "#71717a"
-_FG_DIM  = "#3f3f46"
-_BORDER  = "#27272a"
-_ACCENT  = "#3b82f6"
-_THREAT  = "#ef4444"
-_CLEAN   = "#22c55e"
-_WARNING = "#f59e0b"
-_MUTATION = "#a78bfa"
-_CRITICAL = "#dc2626"
+# ── Design system colors (match app.tcss v3.0) ───────────────────────
+_FG_PRI    = "#e2e2e8"
+_FG_SEC    = "#6b6b7a"
+_FG_DIM    = "#3a3a48"
+_BORDER    = "#252530"
+_ACCENT    = "#4a9eff"
+_THREAT    = "#ff4757"
+_CLEAN     = "#2ed573"
+_WARNING   = "#ffa502"
+_MUTATION  = "#a78bfa"
+_CRITICAL  = "#ff3838"
 
 _ACTION_COLORS = {
     "ALLOW":                 _FG_DIM,
@@ -36,14 +36,13 @@ _LEVEL_COLORS = {
 
 
 def _confidence_bar(value: float, width: int = 16) -> str:
-    """Confidence bar with threshold marker at position 14 (~0.87)."""
+    """Confidence bar with threshold marker at FIREWALL_ML_THRESHOLD (0.87)."""
     filled = round(value * width)
-    empty  = width - filled
     color  = _THREAT if value > 0.8 else \
              _WARNING if value > 0.4 else _ACCENT
-    # Build bar with threshold marker
-    bar_chars = []
+    # Build bar with threshold marker at position 0.87
     threshold_pos = round(0.87 * width)
+    bar_chars = []
     for i in range(width):
         if i < filled:
             bar_chars.append(f"[{color}]█[/]")
@@ -57,32 +56,8 @@ def _confidence_bar(value: float, width: int = 16) -> str:
 class XAIPanelWidget(Widget):
     """XAI Analysis — pipeline visual with 3-layer stack connected by box-drawing chars."""
 
-    DEFAULT_CSS = """
-    XAIPanelWidget {
-        width: 42%;
-        background: #141417;
-        border-left: solid #3b82f6;
-        border-right: solid #27272a;
-        padding: 0 1;
-        overflow-y: auto;
-    }
-    #xai-title {
-        height: 1;
-        color: #71717a;
-        text-style: bold;
-        dock: top;
-    }
-    #xai-empty {
-        color: #3f3f46;
-        text-align: center;
-        margin-top: 3;
-        text-style: italic;
-    }
-    #xai-content { height: auto; }
-    """
-
     def compose(self) -> ComposeResult:
-        yield Static("[bold #71717a]XAI ANALYSIS[/]", id="xai-title")
+        yield Static("[bold #6b6b7a]XAI ANALYSIS[/]", id="xai-title")
         yield Static(
             f"[{_FG_DIM}]Awaiting event selection...\n\n"
             f"Select a blocked event from the feed\n"
@@ -122,7 +97,7 @@ class XAIPanelWidget(Widget):
         label_color = _LEVEL_COLORS.get(label, _FG_SEC)
         action_color = _ACTION_COLORS.get(action, _FG_DIM)
 
-        # ── Verdict headline ──────────────────────────────────────
+        # ── Verdict headline (T1 — most visually dominant) ────────
         if blocked:
             verdict = (
                 f"[{_THREAT} bold]█ BLOCKED[/]  "
@@ -138,8 +113,7 @@ class XAIPanelWidget(Widget):
             )
         self.query_one("#xai-verdict", Static).update(verdict)
 
-        # ── Sophistication indicator ──────────────────────────────
-        # 10-position tier indicator: each position = 1 point
+        # ── Sophistication indicator (10-position tier bar) ───────
         tier_chars = []
         for i in range(10):
             if i < soph_score:

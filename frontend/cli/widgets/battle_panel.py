@@ -1,19 +1,19 @@
-"""Battle Engine panel — Red vs Blue contest view. No static controls."""
+"""Battle Engine panel — Red vs Blue contest view. Bypass-first hierarchy."""
 from __future__ import annotations
 from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Static
 
-# ── Design system colors ──────────────────────────────────────────────
-_FG_PRI  = "#e4e4e7"
-_FG_SEC  = "#71717a"
-_FG_DIM  = "#3f3f46"
-_BORDER  = "#27272a"
-_ACCENT  = "#3b82f6"
-_THREAT  = "#ef4444"
-_CLEAN   = "#22c55e"
-_WARNING = "#f59e0b"
-_MUTATION = "#a78bfa"
+# ── Design system colors (match app.tcss v3.0) ───────────────────────
+_FG_PRI    = "#e2e2e8"
+_FG_SEC    = "#6b6b7a"
+_FG_DIM    = "#3a3a48"
+_BORDER    = "#252530"
+_ACCENT    = "#4a9eff"
+_THREAT    = "#ff4757"
+_CLEAN     = "#2ed573"
+_WARNING   = "#ffa502"
+_MUTATION  = "#a78bfa"
 
 _TIER_LABELS = {
     1: ("NAIVE",      _FG_SEC),
@@ -36,25 +36,10 @@ def _tier_bar(tier: int) -> str:
 
 
 class BattlePanelWidget(Widget):
-    """Battle engine — Red vs Blue metrics, bypass-first hierarchy."""
-
-    DEFAULT_CSS = """
-    BattlePanelWidget {
-        width: 30%;
-        background: #141417;
-        padding: 0 1;
-        overflow-y: auto;
-    }
-    #bp-title {
-        height: 1;
-        color: #71717a;
-        text-style: bold;
-        dock: top;
-    }
-    """
+    """Battle engine — bypass-first hierarchy, Red vs Blue metrics."""
 
     def compose(self) -> ComposeResult:
-        yield Static("[bold #71717a]BATTLE ENGINE[/]", id="bp-title")
+        yield Static("[bold #6b6b7a]BATTLE ENGINE[/]", id="bp-title")
         yield Static("", id="bp-headline")
         yield Static("", id="bp-tier-bar")
         yield Static("", id="bp-contest")
@@ -74,21 +59,32 @@ class BattlePanelWidget(Widget):
 
         strat_label, strat_color = _TIER_LABELS.get(tier, ("?", _FG_SEC))
 
-        # Block rate is the headline number
+        # Block rate — important but secondary to bypass count
         block_rate = f"{blocks / attacks * 100:.0f}%" if attacks else "—"
         rate_color = _CLEAN if attacks and blocks / attacks > 0.9 else \
                      _WARNING if attacks and blocks / attacks > 0.5 else \
                      _THREAT if attacks else _FG_SEC
 
-        # Bypass count is T1 THREAT when >0
+        # Bypass count is T1 THREAT when > 0 — the critical danger signal
         byp_color = _THREAT if bypasses > 0 else _FG_SEC
 
-        self.query_one("#bp-headline", Static).update(
-            f"\n[{_FG_SEC}]BLOCK RATE[/]  "
-            f"[{rate_color} bold]{block_rate}[/]  "
-            f"[{_FG_SEC}]tick[/] [{_FG_PRI}]{tick}[/]  "
-            f"[{_FG_SEC}]tier[/] [{strat_color}]{tier}/5 {strategy}[/]"
-        )
+        # Headline: bypass count is the dominant number when > 0
+        if bypasses > 0:
+            headline = (
+                f"\n[{_THREAT} bold]⚠ {bypasses} BYPASS{'ES' if bypasses != 1 else ''}[/]  "
+                f"[{rate_color}]{block_rate}[/][{_FG_SEC}] rate[/]  "
+                f"[{_FG_SEC}]tick[/] [{_FG_PRI}]{tick}[/]  "
+                f"[{_FG_SEC}]tier[/] [{strat_color}]{tier}/5[/]"
+            )
+        else:
+            headline = (
+                f"\n[{_FG_SEC}]BLOCK RATE[/]  "
+                f"[{rate_color} bold]{block_rate}[/]  "
+                f"[{_FG_SEC}]tick[/] [{_FG_PRI}]{tick}[/]  "
+                f"[{_FG_SEC}]tier[/] [{strat_color}]{tier}/5 {strategy}[/]"
+            )
+
+        self.query_one("#bp-headline", Static).update(headline)
 
         self.query_one("#bp-tier-bar", Static).update(
             f"{_tier_bar(tier)}  [{strat_color}]{strat_label}[/]"
@@ -120,9 +116,9 @@ class BattlePanelWidget(Widget):
         """Visual indicator when paused."""
         if paused:
             self.query_one("#bp-title", Static).update(
-                f"[bold #71717a]BATTLE ENGINE[/]  [{_WARNING} bold]▌▌ PAUSED[/]"
+                f"[bold #6b6b7a]BATTLE ENGINE[/]  [{_WARNING} bold]▌▌ PAUSED[/]"
             )
         else:
             self.query_one("#bp-title", Static).update(
-                "[bold #71717a]BATTLE ENGINE[/]"
+                "[bold #6b6b7a]BATTLE ENGINE[/]"
             )

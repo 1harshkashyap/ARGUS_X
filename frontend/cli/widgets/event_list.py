@@ -1,4 +1,4 @@
-"""Live event feed — DataTable with reordered columns and smart visibility."""
+"""Live event feed — DataTable with analyst-optimized columns and smart visibility."""
 from __future__ import annotations
 from datetime import datetime
 from textual.app import ComposeResult
@@ -7,15 +7,16 @@ from textual.widgets import DataTable, Static
 from textual.message import Message
 from rich.text import Text
 
-# ── Design system colors ──────────────────────────────────────────────
-_FG_PRI  = "#e4e4e7"
-_FG_SEC  = "#71717a"
-_FG_DIM  = "#3f3f46"
-_THREAT  = "#ef4444"
-_CLEAN   = "#22c55e"
-_WARNING = "#f59e0b"
-_ACCENT  = "#3b82f6"
-_MUTATION = "#a78bfa"
+# ── Design system colors (match app.tcss v3.0) ───────────────────────
+_FG_PRI    = "#e2e2e8"
+_FG_SEC    = "#6b6b7a"
+_FG_DIM    = "#3a3a48"
+_BORDER    = "#252530"
+_THREAT    = "#ff4757"
+_CLEAN     = "#2ed573"
+_WARNING   = "#ffa502"
+_ACCENT    = "#4a9eff"
+_MUTATION  = "#a78bfa"
 
 # ── Threat type helpers ───────────────────────────────────────────────
 
@@ -52,34 +53,7 @@ class EventSelected(Message):
 
 
 class EventListWidget(Widget):
-    """Event feed with analyst-optimized column order: STATUS → TYPE → TIME → PREVIEW → SCORE → FP."""
-
-    DEFAULT_CSS = """
-    EventListWidget {
-        width: 28%;
-        background: #141417;
-        border-right: solid #27272a;
-    }
-    EventListWidget DataTable {
-        background: #141417;
-        height: 1fr;
-    }
-    #ev-header {
-        height: 1;
-        background: #141417;
-        color: #71717a;
-        text-style: bold;
-        padding: 0 1;
-        dock: top;
-    }
-    #ev-count {
-        height: 1;
-        background: #09090b;
-        color: #71717a;
-        padding: 0 1;
-        dock: bottom;
-    }
-    """
+    """Event feed — columns: ST → TY → SCR → TIME → PREVIEW. FP dropped (shown in XAI only)."""
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
@@ -87,20 +61,20 @@ class EventListWidget(Widget):
         self._selected_row_key: str | None = None
 
     def compose(self) -> ComposeResult:
-        yield Static("[bold #71717a]EVENT FEED[/]", id="ev-header")
         yield DataTable(id="ev-table", cursor_type="row", show_header=True)
         yield Static("No events yet", id="ev-count")
 
     def on_mount(self) -> None:
         table = self.query_one(DataTable)
-        # Column order: STATUS → TYPE → TIME → PREVIEW → SCORE → FP
-        # Rationale: analyst needs blocked/clean FIRST, threat type SECOND
-        table.add_column(Text("ST",      style=_FG_SEC), width=3)
-        table.add_column(Text("TY",      style=_FG_SEC), width=4)
-        table.add_column(Text("TIME",    style=_FG_SEC), width=9)
-        table.add_column(Text("PREVIEW", style=_FG_SEC), width=30)
-        table.add_column(Text("SCR",     style=_FG_SEC), width=5)
-        table.add_column(Text("FP",      style=_FG_SEC), width=9)
+        # Column order: ST → TY → SCR → TIME → PREVIEW
+        # Rationale: analyst needs blocked status FIRST, threat type SECOND,
+        # severity score THIRD (before time — threat level > chronology),
+        # then time, then preview fills remaining width.
+        table.add_column(Text("ST",   style=_FG_SEC), width=3)
+        table.add_column(Text("TY",   style=_FG_SEC), width=4)
+        table.add_column(Text("SCR",  style=_FG_SEC), width=5)
+        table.add_column(Text("TIME", style=_FG_SEC), width=9)
+        table.add_column(Text("PREVIEW", style=_FG_SEC))
 
     def load_events(self, events: list[dict]) -> None:
         """Replace event list with fresh data from API."""
@@ -113,35 +87,31 @@ class EventListWidget(Widget):
             threat  = str(ev.get("threat_type", "CLEAN"))
             abbrev, color = _abbrev(threat)
 
-            # STATUS: single visual mark — ▐ for blocked, dim │ for clean
+            # STATUS: single visual mark — ▐ for blocked, dim · for clean
             if blocked:
                 status_text = Text("▐", style=f"bold {_THREAT}")
             else:
-                status_text = Text("│", style=_FG_DIM)
+                status_text = Text("·", style=_FG_DIM)
 
             type_text = Text(abbrev, style=f"bold {color}")
-            preview   = str(ev.get("message_preview", ""))[:28]
+            preview   = str(ev.get("message_preview", ""))[:35]
             score     = ev.get("threat_score", 0.0)
-            fp_raw    = str(ev.get("attack_fingerprint", ""))[:8]
             time_str  = _parse_time(ev.get("created_at"))
 
-            # Smart visibility: score and FP only shown for blocked events
+            # Smart visibility: score shown colored for blocked, dim dot for clean
             if blocked:
                 score_color = _THREAT if score > 0.8 else \
                               _WARNING if score > 0.4 else _FG_PRI
                 score_text = Text(f"{score:.1f}", style=f"bold {score_color}")
-                fp_text    = Text(fp_raw or "—" * 8, style=_FG_SEC)
             else:
-                score_text = Text("—", style=_FG_DIM)
-                fp_text    = Text("", style=_FG_DIM)
+                score_text = Text("·", style=_FG_DIM)
 
             table.add_row(
                 status_text,
                 type_text,
-                Text(time_str, style=_FG_SEC),
-                Text(preview,  style=_FG_PRI),
                 score_text,
-                fp_text,
+                Text(time_str, style=_FG_SEC),
+                Text(preview,  style=_FG_PRI if blocked else _FG_SEC),
                 key=ev.get("id", preview[:8]),
             )
 

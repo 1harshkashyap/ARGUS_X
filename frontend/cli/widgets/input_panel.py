@@ -1,5 +1,5 @@
 """
-Input panel — bottom dock, compact 14-row layout.
+Input panel — bottom dock, compact 12-row layout.
 Two tabs: HR ASSISTANT and ATTACK CONSOLE.
 Maintains command history. F1-F6 fire preset attacks instantly.
 """
@@ -13,15 +13,15 @@ from textual.widgets import (
 from textual.containers import Horizontal
 from textual.message import Message
 
-# ── Design system colors ──────────────────────────────────────────────
-_FG_PRI  = "#e4e4e7"
-_FG_SEC  = "#71717a"
-_FG_DIM  = "#3f3f46"
-_ACCENT  = "#3b82f6"
-_THREAT  = "#ef4444"
-_CLEAN   = "#22c55e"
-_WARNING = "#f59e0b"
-_MUTATION = "#a78bfa"
+# ── Design system colors (match app.tcss v3.0) ───────────────────────
+_FG_PRI    = "#e2e2e8"
+_FG_SEC    = "#6b6b7a"
+_FG_DIM    = "#3a3a48"
+_ACCENT    = "#4a9eff"
+_THREAT    = "#ff4757"
+_CLEAN     = "#2ed573"
+_WARNING   = "#ffa502"
+_MUTATION  = "#a78bfa"
 
 # ── Messages posted by InputPanel ────────────────────────────────────
 
@@ -78,64 +78,6 @@ PRESETS: dict[str, tuple[str, str]] = {
 
 
 class InputPanelWidget(Widget):
-    DEFAULT_CSS = """
-    InputPanelWidget {
-        height: 14;
-        border-top: solid #3b82f6;
-        background: #09090b;
-        dock: bottom;
-    }
-    TabbedContent {
-        height: 1fr;
-        background: #09090b;
-    }
-    TabPane {
-        background: #09090b;
-        padding: 0;
-    }
-    #chat-log, #rt-log {
-        height: 5;
-        background: #141417;
-        border: solid #27272a;
-        margin: 0 1;
-    }
-    .input-row {
-        height: 3;
-        margin: 0 1;
-        align: left middle;
-    }
-    #chat-input, #rt-input {
-        width: 1fr;
-        border: solid #27272a;
-        background: #141417;
-    }
-    #chat-input:focus, #rt-input:focus {
-        border: solid #3b82f6;
-    }
-    #rt-presets {
-        height: 1;
-        margin: 0 1;
-        layout: horizontal;
-        align: left middle;
-    }
-    .preset-btn {
-        margin-right: 1;
-        min-width: 10;
-        background: #141417;
-        border: none;
-        color: #71717a;
-        height: 1;
-    }
-    .preset-btn:hover {
-        background: #1e293b;
-        color: #e4e4e7;
-    }
-    #status-label {
-        color: #71717a;
-        height: 1;
-        padding: 0 2;
-    }
-    """
 
     def __init__(self, api_key: str = "", **kwargs) -> None:
         super().__init__(**kwargs)
