@@ -149,7 +149,7 @@ class ArgusApp(App):
         result = await api.chat(message, session_id, api_key)
 
         if isinstance(result, api.Ok):
-            data = result.data
+            data = {**result.data}  # Shallow copy — never mutate response data in-place
 
             # Determine which tab is active — route response accordingly
             tabs = panel.query_one(TabbedContent)
