@@ -84,6 +84,7 @@ class ArgusApp(App):
         await self._refresh_events()
         await self._refresh_battle()
         self.set_interval(STATS_POLL_INTERVAL,  self._refresh_stats)
+        self.set_interval(STATS_POLL_INTERVAL,  self._refresh_health)
         self.set_interval(EVENTS_POLL_INTERVAL, self._refresh_events)
         self.set_interval(BATTLE_POLL_INTERVAL, self._refresh_battle)
 
@@ -102,7 +103,7 @@ class ArgusApp(App):
     async def _refresh_stats(self) -> None:
         result = await api.stats()
         if isinstance(result, api.Ok):
-            data = result.data
+            data = {**result.data}  # Shallow copy — never mutate response data in-place
             # Inject cached health services if available
             if self._last_health_services:
                 data["services"] = self._last_health_services

@@ -25,11 +25,3 @@ class AgentStatus(BaseModel):
     uptime_seconds: float = 0.0
 
 
-class CycleResult(BaseModel):
-    """Result of a single forced battle cycle."""
-    attack_payload: str = ""
-    attack_tier: int = 1
-    blocked: bool = False
-    blue_patched: bool = False
-    tick: int = 0
-    duration_ms: float = 0.0

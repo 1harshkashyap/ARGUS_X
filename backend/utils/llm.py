@@ -4,6 +4,15 @@ import threading
 # ── Shared Gemini global-state lock ──────────────────────────────────
 # genai.configure() mutates global state. All callers (LLMWrapper, RedAgent,
 # BlueAgent, MutationEngine) MUST hold this lock before configure() + generate.
+#
+# KNOWN LIMITATION (BUG-003): genai.configure() is process-global.
+# The gemini_lock serializes access correctly (no key mixing), but:
+# - If a Gemini call times out via asyncio.wait_for, the executor thread
+#   continues running with the lock held. Subsequent callers queue up,
+#   causing cascading timeouts under concurrent load.
+# - True fix requires per-request client instantiation, which the current
+#   google-generativeai SDK version does not cleanly support.
+# - Acceptable for single-user / low-concurrency use (ARGUS-X demo scope).
 gemini_lock = threading.Lock()
 import time
 import hashlib

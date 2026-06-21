@@ -12,7 +12,7 @@ class SessionData:
     threat_count: int = 0
     last_seen: float = field(default_factory=time.time)
     created_at: float = field(default_factory=time.time)
-    escalation_count: int = 0
+    escalation_count: int = 0  # Consecutive threats (resets on clean request)
     last_threat_type: str = "CLEAN"
 
 
@@ -62,6 +62,11 @@ class SessionTracker:
 
         ratio = session.threat_count / session.total_requests
 
+        # Consecutive-threat escalation boosts the effective ratio
+        # 5+ consecutive threats in a row bumps up by one tier
+        if session.escalation_count >= 5:
+            ratio = min(1.0, ratio + 0.25)
+
         if ratio >= self._THRESHOLDS["CRITICAL"]:
             return "CRITICAL"
         elif ratio >= self._THRESHOLDS["HIGH"]:
@@ -97,6 +102,8 @@ class SessionTracker:
             session.threat_count += 1
             session.last_threat_type = threat_type
             session.escalation_count += 1
+        else:
+            session.escalation_count = 0  # Reset on clean request
 
         new_level = self.get_level(session_id)
 

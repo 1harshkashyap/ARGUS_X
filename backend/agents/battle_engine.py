@@ -1,5 +1,6 @@
 import asyncio
 import time
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from utils.logger import logger
 from utils.db import update_battle_state, get_battle_state
@@ -85,6 +86,7 @@ class BattleEngine:
             "red_strategy":            self.red_strategy,
             "current_attack_preview":  self.last_attack[:_PREVIEW_LEN],
             "last_attack_result":      self.last_result,
+            "updated_at":              datetime.now(timezone.utc).isoformat(),
         }
 
     def get_status(self) -> Dict[str, Any]:
