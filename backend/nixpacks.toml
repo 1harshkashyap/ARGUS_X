@@ -1,0 +1,15 @@
+# Railway build configuration for ARGUS-X
+# Nixpacks auto-detects Python + requirements.txt
+# We add a custom build step to download the ML model after pip install
+
+[phases.setup]
+nixPkgs = ["python313"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[phases.build]
+cmds = ["python scripts/download_model.py"]
+
+[start]
+cmd = "uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'"
