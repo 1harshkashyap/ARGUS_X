@@ -13,6 +13,95 @@ import threading
 # - True fix requires per-request client instantiation, which the current
 #   google-generativeai SDK version does not cleanly support.
 # - Acceptable for single-user / low-concurrency use (ARGUS-X demo scope).
+class GeminiCircuitBreaker:
+    """
+    Circuit breaker for SYSTEM key Gemini calls only.
+
+    Prevents cascading 30-second timeouts when the system Gemini
+    key quota is exhausted. After FAILURE_THRESHOLD consecutive
+    failures, trips OPEN — all subsequent system-key calls are
+    skipped immediately (falling through to mock mode in ~0ms
+    instead of waiting the full timeout).
+
+    NEVER applied to BYOAK user keys — those always go through.
+
+    States:
+      CLOSED    — Normal. System key calls proceed.
+      OPEN      — Tripped. System key calls skipped immediately.
+      HALF_OPEN — Recovery test. One call allowed through.
+
+    Thread-safe: all state mutations under _lock (threading.Lock)
+    because _try_gemini runs in a thread-pool executor.
+    """
+
+    FAILURE_THRESHOLD = 3      # Consecutive failures to trip
+    RECOVERY_SECONDS  = 60.0   # Seconds before attempting recovery
+
+    def __init__(self) -> None:
+        self._state:           str   = "CLOSED"
+        self._failure_count:   int   = 0
+        self._last_failure_at: float = 0.0
+        self._lock = threading.Lock()
+
+    @property
+    def state(self) -> str:
+        """Current state string — for logging only."""
+        with self._lock:
+            return self._state
+
+    def is_open(self) -> bool:
+        """
+        Returns True if the circuit is OPEN (skip system-key call).
+        Returns False if CLOSED or HALF_OPEN (allow call through).
+        Automatically transitions OPEN → HALF_OPEN after recovery window.
+        """
+        with self._lock:
+            if self._state == "CLOSED":
+                return False
+            if self._state == "OPEN":
+                elapsed = time.monotonic() - self._last_failure_at
+                if elapsed >= self.RECOVERY_SECONDS:
+                    self._state = "HALF_OPEN"
+                    return False  # Allow one test call through
+                return True
+            # HALF_OPEN — allow the test call through
+            return False
+
+    def record_success(self) -> None:
+        """Call when a system-key Gemini call succeeds."""
+        with self._lock:
+            prev = self._state
+            self._state         = "CLOSED"
+            self._failure_count = 0
+        if prev != "CLOSED":
+            logger.info(
+                f"Gemini circuit breaker CLOSED — system key recovered"
+            )
+
+    def record_failure(self) -> None:
+        """
+        Call when a system-key Gemini call fails or returns None.
+        Trips the breaker after FAILURE_THRESHOLD consecutive failures.
+        """
+        with self._lock:
+            self._failure_count  += 1
+            self._last_failure_at = time.monotonic()
+            prev = self._state
+            if (self._failure_count >= self.FAILURE_THRESHOLD
+                    or self._state == "HALF_OPEN"):
+                self._state = "OPEN"
+        if prev != "OPEN" and self._state == "OPEN":
+            logger.warning(
+                f"Gemini circuit breaker OPEN after "
+                f"{self._failure_count} consecutive failure(s). "
+                f"System key calls bypassed for "
+                f"{self.RECOVERY_SECONDS:.0f}s. "
+                f"Falling through to mock mode."
+            )
+
+
+_system_gemini_cb = GeminiCircuitBreaker()
+
 gemini_lock = threading.Lock()
 import time
 import hashlib
@@ -151,16 +240,31 @@ class LLMWrapper:
                     latency_ms=round((time.time() - start) * 1000, 2)
                 )
             # Development: try system key first, then fall through to mock
-            if settings.GEMINI_API_KEY:
-                logger.info("Dev mode: using system Gemini key (development only)")
-                result = await self._try_gemini(
-                    prompt, system_prompt, settings.GEMINI_API_KEY,
-                    temperature, max_tokens
-                )
-                if result:
-                    result.latency_ms = round((time.time() - start) * 1000, 2)
-                    return result
-            # Dev mode: no system key or Gemini failed — fall through to mock
+            if settings.is_development and settings.GEMINI_API_KEY:
+                if _system_gemini_cb.is_open():
+                    logger.info(
+                        f"Gemini circuit breaker OPEN — skipping system key, "
+                        f"using mock. State resets after "
+                        f"{GeminiCircuitBreaker.RECOVERY_SECONDS:.0f}s."
+                    )
+                    # Fall through to mock mode at end of generate()
+                else:
+                    logger.info(
+                        "Dev mode: using system Gemini key pool (development only)"
+                    )
+                    result = await self._try_gemini(
+                        prompt, system_prompt, settings.GEMINI_API_KEY,
+                        temperature, max_tokens
+                    )
+                    if result:
+                        _system_gemini_cb.record_success()
+                        result.latency_ms = round(
+                            (time.time() - start) * 1000, 2
+                        )
+                        return result
+                    else:
+                        _system_gemini_cb.record_failure()
+                        # Fall through to mock mode
 
         # ── Final fallback: Mock mode ──────────────────────────────────
         logger.info("Falling back to mock mode")
