@@ -11,7 +11,7 @@ from config import settings
 
 _http_client: Optional[httpx.AsyncClient] = None
 _init_lock: Optional[asyncio.Lock] = None
-_stats_lock: Optional[asyncio.Lock] = None
+
 
 
 def _get_headers() -> Dict[str, str]:
@@ -127,47 +127,40 @@ async def update_battle_state(state: Dict[str, Any]) -> bool:
 
 async def update_stats(increments: Dict[str, int]) -> bool:
     """
-    Increment stats counters. Non-fatal — returns False on failure.
-    increments: {"total_events": 1, "total_blocked": 1}
-    Uses asyncio.Lock to prevent TOCTOU race on concurrent read-modify-write.
+    Atomically increment stats counters via PostgreSQL RPC.
+
+    Uses a server-side function (increment_stats) so that each call
+    is a single atomic SQL operation — no read-modify-write, no race
+    conditions, safe under any concurrency.
+
+    Args:
+        increments: dict with any subset of keys:
+            total_events, total_blocked, total_bypasses, total_mutations
+            Missing keys default to 0 (no increment for that column).
+
+    Returns True on success, False on any failure. Never raises.
     """
-    global _stats_lock
-    if _stats_lock is None:
-        _stats_lock = asyncio.Lock()
-    async with _stats_lock:
-        client = await _get_http_client()
-        if not client:
-            return False
-        try:
-            # Read current stats
-            response = await client.get(
-                _rest_url("stats"),
-                params={"id": "eq.1", "select": "*"},
-            )
-            if response.status_code != 200:
-                return False
-
-            data = response.json()
-            if not data:
-                return False
-
-            current = data[0]
-            updates = {}
-            for key, inc in increments.items():
-                updates[key] = current.get(key, 0) + inc
-
-            response = await client.patch(
-                _rest_url("stats"),
-                params={"id": "eq.1"},
-                json=updates,
-            )
-            return response.status_code in (200, 204)
-        except httpx.TimeoutException:
-            logger.warning(f"update_stats timed out after {settings.DB_TIMEOUT}s")
-            return False
-        except Exception as e:
-            logger.warning(f"Stats update failed: {type(e).__name__}")
-            return False
+    client = await _get_http_client()
+    if not client:
+        return False
+    try:
+        params = {
+            "p_total_events":    increments.get("total_events",    0),
+            "p_total_blocked":   increments.get("total_blocked",   0),
+            "p_total_bypasses":  increments.get("total_bypasses",  0),
+            "p_total_mutations": increments.get("total_mutations", 0),
+        }
+        response = await client.post(
+            f"{settings.SUPABASE_URL}/rest/v1/rpc/increment_stats",
+            json=params,
+        )
+        return response.status_code in (200, 204)
+    except httpx.TimeoutException:
+        logger.warning(f"update_stats RPC timed out after {settings.DB_TIMEOUT}s")
+        return False
+    except Exception as e:
+        logger.warning(f"Stats atomic increment failed: {type(e).__name__}")
+        return False
 
 
 async def add_dynamic_rule(pattern: str, threat_type: str, source_attack: str) -> bool:

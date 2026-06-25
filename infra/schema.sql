@@ -88,6 +88,7 @@ CREATE INDEX IF NOT EXISTS idx_events_session_id   ON events(session_id);
 CREATE INDEX IF NOT EXISTS idx_events_blocked       ON events(blocked);
 CREATE INDEX IF NOT EXISTS idx_events_threat_type   ON events(threat_type);
 CREATE INDEX IF NOT EXISTS idx_xai_event_id         ON xai_decisions(event_id);
+CREATE INDEX IF NOT EXISTS idx_xai_created_at        ON xai_decisions(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_campaigns_pattern    ON campaigns(attack_pattern);
 CREATE INDEX IF NOT EXISTS idx_dynamic_rules_type   ON dynamic_rules(threat_type);
 
@@ -115,3 +116,27 @@ CREATE POLICY "service_role_only" ON battle_state FOR ALL USING (auth.role() = '
 CREATE POLICY "service_role_only" ON campaigns FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "service_role_only" ON dynamic_rules FOR ALL USING (auth.role() = 'service_role');
 CREATE POLICY "service_role_only" ON stats FOR ALL USING (auth.role() = 'service_role');
+
+-- ── RPC Functions ────────────────────────────────────────────────
+-- Atomic stats increment — called by backend/utils/db.py:update_stats()
+CREATE OR REPLACE FUNCTION increment_stats(
+    p_total_events    integer DEFAULT 0,
+    p_total_blocked   integer DEFAULT 0,
+    p_total_bypasses  integer DEFAULT 0,
+    p_total_mutations integer DEFAULT 0
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    UPDATE stats
+    SET
+        total_events    = total_events    + p_total_events,
+        total_blocked   = total_blocked   + p_total_blocked,
+        total_bypasses  = total_bypasses  + p_total_bypasses,
+        total_mutations = total_mutations + p_total_mutations,
+        updated_at      = NOW()
+    WHERE id = 1;
+END;
+$$;
