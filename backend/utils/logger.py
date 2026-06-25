@@ -2,6 +2,7 @@ import logging
 import re
 import sys
 from typing import Optional
+from utils.context import get_request_id
 
 
 # ── Key redaction patterns ────────────────────────────────────────────
@@ -35,6 +36,10 @@ class RedactingFormatter(logging.Formatter):
         record = copy.copy(record)
         # Redact the message
         record.msg = redact_keys(str(record.msg))
+        # Prepend request ID if we're inside a request context
+        req_id = get_request_id()
+        if req_id:
+            record.msg = f"[{req_id}] {record.msg}"
         # Redact any args passed to the logger
         if record.args:
             if isinstance(record.args, dict):

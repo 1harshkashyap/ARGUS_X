@@ -5,6 +5,7 @@ from utils.logger import logger
 from utils.llm import llm, detect_key_type
 from utils.db import log_event, log_xai_decision, update_stats
 from utils.session import session_tracker
+from utils.context import new_request_id, set_request_id, reset_request_id
 from security.firewall import firewall
 from security.ml_classifier import ml_classifier, MLResult
 from security.fingerprinter import fingerprinter
@@ -55,9 +56,19 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
     Always returns a valid ChatResponse — never raises to the client.
     """
+    # Generate and set correlation ID for this request's context.
+    # All log lines from this request (including background tasks)
+    # will automatically include [REQ_ID] prefix via the formatter.
+    _req_id = new_request_id()
+    _ctx_token = set_request_id(_req_id)
     start = time.time()
 
     try:
+        logger.info(
+            f"Request: session={request.session_id[:12]} "
+            f"len={len(request.message)}"
+        )
+
         # ── Step 1: API Key Validation ────────────────────────────
         key_type = detect_key_type(request.api_key)
 
@@ -187,6 +198,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
         )
 
         # ── Step 10: Background tasks (fire-and-forget) ───────────
+        # Background tasks inherit current context at creation time —
+        # request_id propagates automatically via contextvars.
         db_task = asyncio.create_task(_log_to_db(request, response), name="db_log")
         _background_tasks.add(db_task)
         db_task.add_done_callback(_background_tasks.discard)
@@ -225,6 +238,8 @@ async def chat(request: ChatRequest) -> ChatResponse:
             session_id=request.session_id,
             latency_ms=round((time.time() - start) * 1000, 2)
         )
+    finally:
+        reset_request_id(_ctx_token)
 
 
 async def _log_to_db(request: ChatRequest, response: ChatResponse):
