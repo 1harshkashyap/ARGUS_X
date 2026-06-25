@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Any, Dict
 from utils.logger import logger
 from utils.auth import require_dashboard_key
-from schemas.agents import AgentStatus
+from schemas.agents import AgentStatus, CycleResponse
 
 router = APIRouter(prefix="/api/v1/agents", tags=["Agents"])
 
@@ -78,28 +78,28 @@ async def resume_engine() -> SimpleResponse:
 
 @router.post(
     "/cycle",
+    response_model=CycleResponse,
     summary="Force one immediate battle tick",
     description=(
         "Triggers one battle tick immediately regardless of pause state. "
-        "Returns battle state after the tick. May take up to 35 seconds "
-        "(Gemini call). Always HTTP 200."
+        "Returns CycleResponse with battle state after tick. "
+        "May take up to 35 seconds (Gemini call). Always HTTP 200."
     ),
     dependencies=[Depends(require_dashboard_key)]
 )
-async def force_cycle() -> Dict[str, Any]:
-    """Force one immediate battle tick. Returns state after tick."""
+async def force_cycle() -> CycleResponse:
+    """Force one immediate battle tick. Returns CycleResponse."""
     try:
         from agents.battle_engine import battle_engine
         logger.info("Forced battle cycle triggered via API")
-        result = await battle_engine.cycle()
-        return result
+        state: dict = await battle_engine.cycle()
+        return CycleResponse(**state)
     except asyncio.CancelledError:
         raise
     except Exception as e:
         logger.error(f"POST /agents/cycle error: {type(e).__name__}")
-        return {
-            "success": False,
-            "error": type(e).__name__,
-            "message": "Cycle failed -- check server logs"
-        }
+        return CycleResponse(
+            success=False,
+            error=type(e).__name__
+        )
 

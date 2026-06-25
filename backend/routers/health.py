@@ -1,3 +1,4 @@
+import asyncio
 import time
 from fastapi import APIRouter
 from pydantic import BaseModel
@@ -48,12 +49,19 @@ async def health_check() -> HealthResponse:
     # Check each service safely — never crash if unavailable
     services = {}
 
-    # Database status
+    # Database status — real connectivity check (ARCH-011)
     try:
-        if settings.SUPABASE_URL and settings.SUPABASE_KEY:
-            services["database"] = "configured"
-        else:
+        if not settings.SUPABASE_URL or not settings.SUPABASE_KEY:
             services["database"] = "not_configured"
+        else:
+            from utils.db import check_connection
+            connected = await asyncio.wait_for(
+                check_connection(),
+                timeout=3.0
+            )
+            services["database"] = "online" if connected else "unreachable"
+    except asyncio.TimeoutError:
+        services["database"] = "timeout"
     except Exception:
         services["database"] = "error"
 

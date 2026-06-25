@@ -120,6 +120,40 @@ async def lifespan(app: FastAPI):
     await firewall.initialize()
     logger.info("Firewall initialized")
 
+    # ── Startup configuration summary (ARCH-005) ─────────────────────
+    def _status(condition: bool, ok: str = "configured",
+                 bad: str = "MISSING") -> str:
+        return ok if condition else bad
+
+    logger.info("─" * 52)
+    logger.info("ARGUS-X — STARTUP CONFIGURATION")
+    logger.info(f"  Environment     {settings.ENVIRONMENT}")
+    logger.info(
+        f"  Gemini key      "
+        f"{_status(bool(settings.GEMINI_API_KEY))}"
+    )
+    logger.info(
+        f"  Supabase        "
+        f"{_status(bool(settings.SUPABASE_URL and settings.SUPABASE_KEY))}"
+    )
+    logger.info(
+        f"  ML Classifier   "
+        f"{'enabled' if settings.ML_ENABLED else 'disabled'}"
+    )
+    logger.info(
+        f"  Battle Engine   "
+        f"{'enabled' if settings.BATTLE_ENABLED else 'disabled'}"
+    )
+    logger.info(
+        f"  Dashboard Key   "
+        f"{_status(bool(settings.DASHBOARD_READ_KEY), 'configured', 'FAIL-CLOSED — endpoints will 503')}"
+    )
+    logger.info(
+        f"  Rate limit      "
+        f"{settings.RATE_LIMIT_PER_MINUTE}/min (chat: 10/min)"
+    )
+    logger.info("─" * 52)
+
     # Start battle engine if enabled
     battle_task = None
     if settings.BATTLE_ENABLED:
