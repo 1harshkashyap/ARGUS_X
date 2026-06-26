@@ -154,6 +154,13 @@ async def lifespan(app: FastAPI):
     )
     logger.info("─" * 52)
 
+    # ── Single-instance constraint ────────────────────────────────────
+    # ARGUS-X uses in-memory state for: rate limiting, session tracking,
+    # campaign correlation, mutation cooldown, and the battle engine.
+    # This design is correct for single-instance Railway deployment.
+    # Do NOT run multiple instances without externalizing this state.
+    # See docs/ARCHITECTURE.md — "Single-Instance Constraint" section.
+
     # Start battle engine if enabled
     battle_task = None
     if settings.BATTLE_ENABLED:
