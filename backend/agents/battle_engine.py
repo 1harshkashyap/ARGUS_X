@@ -231,10 +231,17 @@ class BattleEngine:
             raise
         except Exception as e:
             logger.error(f"BattleEngine.cycle error: {type(e).__name__}")
+            return {
+                **self.get_state(),
+                "forced_cycle": True,
+                "success": False,
+                "error": type(e).__name__,
+            }
 
         return {
             **self.get_state(),
-            "forced_cycle": True
+            "forced_cycle": True,
+            "success": True,
         }
 
 

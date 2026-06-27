@@ -157,6 +157,13 @@ class InputFirewall:
 
     async def initialize(self):
         """Load dynamic rules and start background refresh task."""
+        # Guard against double-call: cancel existing task to prevent orphans
+        if self._refresh_task and not self._refresh_task.done():
+            self._refresh_task.cancel()
+            try:
+                await self._refresh_task
+            except asyncio.CancelledError:
+                pass
         await self._refresh_dynamic_rules()
         self._refresh_task = asyncio.create_task(self._background_refresh())
         logger.info(

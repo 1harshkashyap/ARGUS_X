@@ -83,17 +83,20 @@ class GeminiCircuitBreaker:
         Call when a system-key Gemini call fails or returns None.
         Trips the breaker after FAILURE_THRESHOLD consecutive failures.
         """
+        should_log = False
         with self._lock:
             self._failure_count  += 1
             self._last_failure_at = time.monotonic()
-            prev = self._state
             if (self._failure_count >= self.FAILURE_THRESHOLD
                     or self._state == "HALF_OPEN"):
+                if self._state != "OPEN":
+                    should_log = True
                 self._state = "OPEN"
-        if prev != "OPEN" and self._state == "OPEN":
+            count = self._failure_count
+        if should_log:
             logger.warning(
                 f"Gemini circuit breaker OPEN after "
-                f"{self._failure_count} consecutive failure(s). "
+                f"{count} consecutive failure(s). "
                 f"System key calls bypassed for "
                 f"{self.RECOVERY_SECONDS:.0f}s. "
                 f"Falling through to mock mode."
