@@ -12,6 +12,7 @@ from textual.widgets import (
 )
 from textual.containers import Horizontal
 from textual.message import Message
+from rich.markup import escape as rich_escape
 from theme import (
     FG_PRIMARY, FG_SECONDARY, FG_DIM, ACCENT,
     THREAT, STATUS_CLEAN, STATUS_WARNING, STATUS_MUTATION,
@@ -142,7 +143,7 @@ class InputPanelWidget(Widget):
             return
         self._add_history(text)
         chat_log = self.query_one("#chat-log", RichLog)
-        chat_log.write(f"[{ACCENT} bold]You[/]  {text}")
+        chat_log.write(f"[{ACCENT} bold]You[/]  {rich_escape(text)}")
         self.query_one("#chat-input", Input).clear()
         self._set_status("Analyzing...")
         self.post_message(ChatRequest(text, self._session_id, self.api_key))
@@ -163,7 +164,7 @@ class InputPanelWidget(Widget):
             )
         else:
             chat_log.write(
-                f"[{STATUS_CLEAN} bold]ARGUS-X[/]  {response[:400]}\n"
+                f"[{STATUS_CLEAN} bold]ARGUS-X[/]  {rich_escape(response[:400])}\n"
                 f"[{FG_SECONDARY}]          {latency:.0f}ms[/]"
             )
         self._set_status("Ready")
@@ -191,7 +192,7 @@ class InputPanelWidget(Widget):
         rt_log = self.query_one("#rt-log", RichLog)
         rt_log.write(
             f"\n[{STATUS_MUTATION} bold]► {label}[/]\n"
-            f"[{FG_DIM}]{payload[:80]}{'…' if len(payload) > 80 else ''}[/]"
+            f"[{FG_DIM}]{rich_escape(payload[:80])}{'…' if len(payload) > 80 else ''}[/]"
         )
         self._set_status(f"Firing {label}...")
         self.post_message(ChatRequest(payload, self._session_id, self.api_key))

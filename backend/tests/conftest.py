@@ -8,7 +8,11 @@ import requests
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 BASE_URL = os.environ.get("ARGUS_TEST_BASE_URL", "http://localhost:8000")
-DASHBOARD_KEY = os.environ.get("ARGUS_DASHBOARD_KEY", "_9Bfu0TFIKPiOBQmOTf6f2OdOE7V04DwH3vGruNQlgc")
+DASHBOARD_KEY = os.environ.get("ARGUS_DASHBOARD_KEY", "")
+assert DASHBOARD_KEY, (
+    "ARGUS_DASHBOARD_KEY env var is required to run tests. "
+    "Set it in your shell or in backend/.env"
+)
 
 
 @pytest.fixture(scope="session")

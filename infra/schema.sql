@@ -140,3 +140,9 @@ BEGIN
     WHERE id = 1;
 END;
 $$;
+
+-- SEC-014: Restrict RPC to service_role only — prevent anon stat manipulation
+REVOKE EXECUTE ON FUNCTION increment_stats FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION increment_stats FROM anon;
+REVOKE EXECUTE ON FUNCTION increment_stats FROM authenticated;
+GRANT EXECUTE ON FUNCTION increment_stats TO service_role;
