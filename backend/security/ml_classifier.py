@@ -177,9 +177,17 @@ class MLClassifier:
                 length=None,  # Dynamic padding — no fixed length
             )
 
-            # Validate tokenizer produces non-empty encodings
-            _test_enc = self._tokenizer.encode("test")
-            assert len(_test_enc.ids) > 0, "Tokenizer produced empty encoding"
+            # Validate tokenizer produces sane encodings on representative input
+            try:
+                _test_enc = self._tokenizer.encode(
+                    "What is the annual leave policy?"
+                )
+                assert len(_test_enc.ids) > 0, "Tokenizer produced empty encoding"
+                assert len(_test_enc.ids) < _MAX_TOKENS, "Test encoding too long"
+            except Exception as e:
+                logger.warning(f"MLClassifier: tokenizer sanity check failed: {e}")
+                self._session = None
+                return
 
             logger.info("MLClassifier: tokenizer loaded")
         except Exception as e:
@@ -193,8 +201,8 @@ class MLClassifier:
 
         self.available = True
         logger.info(
-            f"MLClassifier: online — prompt injection classifier active "
-            f"(threshold={settings.FIREWALL_ML_THRESHOLD})"
+            f"MLClassifier: ProtectAI DeBERTa online — "
+            f"INJECTION classifier active (threshold={settings.FIREWALL_ML_THRESHOLD})"
         )
 
     def classify(self, text: str) -> MLResult:
@@ -304,7 +312,7 @@ class MLClassifier:
         """Return classifier status for health endpoint."""
         return {
             "available": self.available,
-            "method": "ONNX" if self.available else "UNAVAILABLE",
+            "method": "ProtectAI-DeBERTa-ONNX" if self.available else "UNAVAILABLE",
             "threshold": settings.FIREWALL_ML_THRESHOLD,
             "model": self._model_path.name if self._model_path else None,
         }
