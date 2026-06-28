@@ -67,12 +67,12 @@ class BattleEngine:
     def pause(self) -> None:
         """Pause the battle loop (completes current tick if running)."""
         self.is_paused = True
-        logger.info("BattleEngine: paused")
+        logger.info("[BATTLE] BattleEngine: paused")
 
     def resume(self) -> None:
         """Resume the battle loop."""
         self.is_paused = False
-        logger.info("BattleEngine: resumed")
+        logger.info("[BATTLE] BattleEngine: resumed")
 
     def get_state(self) -> Dict[str, Any]:
         """Return current battle state as a plain dict (for API + DB)."""
@@ -106,7 +106,7 @@ class BattleEngine:
         Started as asyncio.create_task() in FastAPI lifespan.
         """
         logger.info(
-            f"BattleEngine: started "
+            f"[BATTLE] BattleEngine: started "
             f"(interval={settings.BATTLE_INTERVAL_SECONDS}s)"
         )
 
@@ -117,12 +117,12 @@ class BattleEngine:
                 await asyncio.sleep(settings.BATTLE_INTERVAL_SECONDS)
 
             except asyncio.CancelledError:
-                logger.info("BattleEngine: cancelled — shutting down cleanly")
+                logger.info("[BATTLE] BattleEngine: cancelled — shutting down cleanly")
                 raise  # ALWAYS re-raise CancelledError
 
             except Exception as e:
                 logger.error(
-                    f"BattleEngine: tick error: {type(e).__name__}: {str(e)[:200]}"
+                    f"[BATTLE] BattleEngine: tick error: {type(e).__name__}: {str(e)[:200]}"
                 )
                 # Brief pause before retrying to avoid tight error loops
                 try:
@@ -144,7 +144,7 @@ class BattleEngine:
         self.red_strategy = _tier_strategy(self.red_tier)
 
         logger.info(
-            f"BattleEngine tick {self.tick}: "
+            f"[BATTLE] BattleEngine tick {self.tick}: "
             f"tier={self.red_tier} strategy={self.red_strategy}"
         )
 
@@ -160,7 +160,7 @@ class BattleEngine:
         )
 
         if not attack.payload:
-            logger.warning("BattleEngine: Red Agent returned empty payload — skipping tick")
+            logger.warning("[BATTLE] BattleEngine: Red Agent returned empty payload — skipping tick")
             self.last_result = "SKIPPED"
             await self._push_state()
             return
@@ -180,7 +180,7 @@ class BattleEngine:
             self.blue_blocks += 1
             self.last_result = "BLOCKED"
             logger.info(
-                f"BattleEngine tick {self.tick}: BLOCKED "
+                f"[BATTLE] BattleEngine tick {self.tick}: BLOCKED "
                 f"rule={firewall_result.matched_rule} "
                 f"conf={firewall_result.confidence:.2f}"
             )
@@ -190,7 +190,7 @@ class BattleEngine:
             self.red_bypasses += 1
             self.last_result = "BYPASSED"
             logger.warning(
-                f"BattleEngine tick {self.tick}: BYPASSED "
+                f"[BATTLE] BattleEngine tick {self.tick}: BYPASSED "
                 f"tier={self.red_tier} — Blue Agent analyzing"
             )
 
@@ -203,7 +203,7 @@ class BattleEngine:
             if patch.success and patch.rule_written:
                 self.blue_patches += 1
                 logger.info(
-                    f"BattleEngine tick {self.tick}: patched "
+                    f"[BATTLE] BattleEngine tick {self.tick}: patched "
                     f"pattern={patch.pattern[:50]!r}"
                 )
 
@@ -215,7 +215,7 @@ class BattleEngine:
         try:
             await update_battle_state(self.get_state())
         except Exception as e:
-            logger.warning(f"BattleEngine: state push failed (non-fatal): {type(e).__name__}")
+            logger.warning(f"[BATTLE] BattleEngine: state push failed (non-fatal): {type(e).__name__}")
 
     # ── Forced cycle (for /agents/cycle endpoint) ─────────────────────
 
@@ -230,7 +230,7 @@ class BattleEngine:
         except asyncio.CancelledError:
             raise
         except Exception as e:
-            logger.error(f"BattleEngine.cycle error: {type(e).__name__}")
+            logger.error(f"[BATTLE] BattleEngine.cycle error: {type(e).__name__}")
             return {
                 **self.get_state(),
                 "forced_cycle": True,

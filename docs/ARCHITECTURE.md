@@ -56,6 +56,8 @@ never logged, never persisted, never returned in responses.
 
 Stats increments use the `increment_stats()` RPC function for
 atomic PostgreSQL updates (no read-modify-write, no lost counts).
+The RPC has `SECURITY DEFINER` and is restricted to `service_role`
+only — `anon` and `authenticated` keys cannot call it (SEC-014).
 
 ---
 
