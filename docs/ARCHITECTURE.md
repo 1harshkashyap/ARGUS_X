@@ -119,10 +119,9 @@ See `backend/requirements.txt` for exact pinned versions.
 Key runtime dependencies:
 - FastAPI 0.104.1 + Uvicorn 0.24.0
 - Pydantic 2.5.0 + pydantic-settings 2.1.0
-- supabase 2.3.0
+- httpx ≥0.24.0 (direct PostgREST client + TUI async client — supabase-py dropped for Python 3.14 compat)
 - onnxruntime 1.16.3 + tokenizers 0.15.0
 - google-generativeai 0.3.2
-- httpx 0.25.0 (TUI async client)
 - textual 0.52.1 (TUI framework)
 
 ---

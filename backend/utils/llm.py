@@ -1,5 +1,15 @@
 import asyncio
+import hashlib
 import threading
+import time
+from dataclasses import dataclass, field
+from typing import Optional
+
+import google.generativeai as genai  # type: ignore
+from openai import AsyncOpenAI  # type: ignore
+
+from config import settings
+from utils.logger import logger
 
 # ── Shared Gemini global-state lock ──────────────────────────────────
 # genai.configure() mutates global state. All callers (LLMWrapper, RedAgent,
@@ -106,14 +116,6 @@ class GeminiCircuitBreaker:
 _system_gemini_cb = GeminiCircuitBreaker()
 
 gemini_lock = threading.Lock()
-import time
-import hashlib
-from dataclasses import dataclass, field
-from typing import Optional
-import google.generativeai as genai  # type: ignore
-from openai import AsyncOpenAI  # type: ignore
-from utils.logger import logger
-from config import settings
 
 
 # ── Key type detection ────────────────────────────────────────────────

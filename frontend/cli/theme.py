@@ -33,6 +33,7 @@ THREAT_TYPE_STYLES: dict[str, tuple[str, str]] = {
     "ROLE_HIJACKING":     ("RH", STATUS_WARNING),
     "INDIRECT_INJECTION": ("II", STATUS_BLOCKED),
     "MULTI_TURN":         ("MT", STATUS_WARNING),
+    "OVERSIZED_INPUT":    ("OI", STATUS_WARNING),
     "CLEAN":              ("CL", STATUS_CLEAN),
 }
 
