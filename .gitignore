@@ -51,3 +51,5 @@ logs/
 # Verification / test scripts — local only, never commit
 backend/verify_*.py
 backend/scripts/archive/
+
+AUDIT_METHODOLOGY.md
